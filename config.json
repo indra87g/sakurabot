@@ -1,7 +1,7 @@
 {
     "bot": {
-        "name": "GAXTAWU",
-        "phoneNumber": "",
+        "name": "SAKURABOT",
+        "phoneNumber": "6281263780655",
         "thumbnail": "https://repository-images.githubusercontent.com/753096396/3f4b7686-0f1d-43f2-8293-2ae1b4487220",
         "groupJid": "",
         "newsletterJid": "120363416372653441@newsletter"
@@ -29,20 +29,20 @@
         "urlInvalid": "URL tidak valid!"
     },
     "owner": {
-        "name": "Budi",
-        "organization": "PT. Pencari Cinta Sejati",
-        "id": "62123456789",
+        "name": "Indra",
+        "organization": "PT. Pemakan Koruptor",
+        "id": "6283172646529",
         "report": true,
         "co": [{
-            "name": "Budi Jr.",
-            "organization": "PT. Pencari Cinta Sejati II",
-            "id": "62987654321",
+            "name": "Broni",
+            "organization": "PT. Pemakan Koruptor",
+            "id": "6281263780655",
             "report": false
         }]
     },
     "sticker": {
         "packname": "",
-        "author": "gaxtawu <github.com/itsreimau/gaxtawu>"
+        "author": "sakurabot <github.com/indra87g/sakurabot>"
     },
     "system": {
         "alwaysOnline": true,
@@ -60,8 +60,8 @@
         "timeZone": "Asia/Jakarta",
         "unavailableAtNight": false,
         "useCoin": true,
-        "usePairingCode": false,
-        "customPairingCode": "UMBR4L15",
+        "usePairingCode": true,
+        "customPairingCode": "S4KUR4BT",
         "useStore": false,
         "useServer": false
     }
