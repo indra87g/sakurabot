@@ -4,7 +4,9 @@
         "phoneNumber": "6281263780655",
         "thumbnail": "https://repository-images.githubusercontent.com/753096396/3f4b7686-0f1d-43f2-8293-2ae1b4487220",
         "groupJid": "",
-        "newsletterJid": "120363416372653441@newsletter"
+        "newsletterJid": "120363416372653441@newsletter",
+        "prefix": "/",
+        "pakasir_slug": "your-slug-here"
     },
     "msg": {
         "admin": "Perintah hanya dapat diakses oleh admin grup!",
