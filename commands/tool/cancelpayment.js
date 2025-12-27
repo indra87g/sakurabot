@@ -8,12 +8,10 @@ module.exports = {
         try {
             const fullOrderId = ctx.args[0];
 
-            // Validate input
             if (!fullOrderId || !fullOrderId.includes('-')) {
                 return await ctx.reply("Format Order ID tidak valid. Harap gunakan Order ID lengkap yang Anda terima. Contoh: /cancelpayment TRX-12345A-10000");
             }
 
-            // Parse the combined order ID
             const parts = fullOrderId.split('-');
             const amount = parseInt(parts.pop(), 10);
             const orderId = parts.join('-');
@@ -22,7 +20,6 @@ module.exports = {
                 return await ctx.reply("Format Order ID tidak valid: nominal tidak ditemukan.");
             }
 
-            // Check for configuration
             const slug = config.bot.pakasir_slug;
             const apikey = config.bot.pakasir_apikey;
             if (!slug || slug === "your-slug-here" || !apikey || apikey === "your-api-key-here") {
@@ -31,22 +28,19 @@ module.exports = {
 
             await ctx.reply(`Mengirim permintaan pembatalan untuk Order ID: ${orderId}...`);
 
-            // Initialize Pakasir SDK
             const pakasir = new Pakasir({ slug, apikey });
-
-            // Cancel the payment
             const result = await pakasir.cancelPayment(orderId, amount);
 
-            // Check for success
-            if (result && result.success) {
-                await ctx.reply(`✅ Permintaan pembatalan untuk Order ID \`${fullOrderId}\` berhasil dikirim.`);
+            // Corrected: The SDK returns the payload directly. Check status to confirm.
+            if (result && result.status === 'canceled') {
+                await ctx.reply(`✅ Pembayaran untuk Order ID \`${fullOrderId}\` berhasil dibatalkan.`);
             } else {
-                await ctx.reply(`Gagal membatalkan pembayaran. Pesan: ${result.message || 'Order ID tidak ditemukan atau pembayaran tidak dapat dibatalkan.'}`);
+                await ctx.reply(`Gagal membatalkan pembayaran. Status saat ini: ${result.status || 'Tidak Diketahui'}.`);
             }
 
         } catch (error) {
             console.error(error);
-            await ctx.reply("Maaf, terjadi kesalahan internal saat memproses permintaan pembatalan.");
+            await ctx.reply(`Maaf, terjadi kesalahan saat memproses permintaan pembatalan: ${error.message}`);
         }
     }
 };

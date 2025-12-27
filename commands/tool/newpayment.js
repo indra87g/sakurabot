@@ -32,25 +32,24 @@ module.exports = {
             // Create payment
             const result = await pakasir.createPayment('qris', randomPart, nominal);
 
-            // Check for success
-            if (result && result.success && result.data) {
+            // Check for success and the correct URL property
+            if (result && result.payment_url) {
                 let replyText = `✅ Pembayaran berhasil dibuat!\n\n`;
                 replyText += `◦  *Order ID*: \`${orderId}\`\n`; // Show the full ID to the user
-                replyText += `◦  *Nominal*: Rp${result.data.amount.toLocaleString('id-ID')}\n`;
-                replyText += `◦  *Status*: ${result.data.status}\n\n`;
+                replyText += `◦  *Nominal*: Rp${result.amount.toLocaleString('id-ID')}\n`;
+                replyText += `◦  *Status*: ${result.status}\n\n`;
                 replyText += `Gunakan Order ID di atas untuk memeriksa status (/infopayment) atau membatalkan (/cancelpayment) pembayaran.\n\n`;
-                replyText += `Silakan selesaikan pembayaran dengan memindai kode QRIS di atas.`;
+                replyText += `Silakan selesaikan pembayaran melalui tautan berikut:\n${result.payment_url}`;
 
-                // Send QRIS image
-                await ctx.replyWithPhoto({ url: result.data.qris_url }, { caption: replyText });
+                await ctx.reply(replyText);
 
             } else {
-                await ctx.reply(`Gagal membuat pembayaran. Pesan dari server: ${result.message || 'Tidak ada pesan'}`);
+                await ctx.reply(`Gagal membuat pembayaran. Pastikan konfigurasi benar dan coba lagi.`);
             }
 
         } catch (error) {
             console.error(error);
-            await ctx.reply("Maaf, terjadi kesalahan internal saat memproses permintaan pembayaran.");
+            await ctx.reply(`Maaf, terjadi kesalahan saat memproses permintaan pembayaran: ${error.message}`);
         }
     }
 };

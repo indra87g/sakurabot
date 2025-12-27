@@ -8,12 +8,10 @@ module.exports = {
         try {
             const fullOrderId = ctx.args[0];
 
-            // Validate input
             if (!fullOrderId || !fullOrderId.includes('-')) {
                 return await ctx.reply("Format Order ID tidak valid. Harap gunakan Order ID lengkap yang Anda terima. Contoh: /infopayment TRX-12345A-10000");
             }
 
-            // Parse the combined order ID
             const parts = fullOrderId.split('-');
             const amount = parseInt(parts.pop(), 10);
             const orderId = parts.join('-');
@@ -22,7 +20,6 @@ module.exports = {
                 return await ctx.reply("Format Order ID tidak valid: nominal tidak ditemukan.");
             }
 
-            // Check for configuration
             const slug = config.bot.pakasir_slug;
             const apikey = config.bot.pakasir_apikey;
             if (!slug || slug === "your-slug-here" || !apikey || apikey === "your-api-key-here") {
@@ -31,33 +28,32 @@ module.exports = {
 
             await ctx.reply(`Mencari informasi untuk Order ID: ${orderId}...`);
 
-            // Initialize Pakasir SDK
             const pakasir = new Pakasir({ slug, apikey });
-
-            // Get payment details using the correct method
             const result = await pakasir.detailPayment(orderId, amount);
 
-            // Check for success
-            if (result && result.success && result.data) {
-                const payment = result.data;
+            // Corrected: The SDK returns the payload directly on success or throws on error.
+            if (result) {
                 let replyText = `✅ Informasi Pembayaran Ditemukan\n\n`;
                 replyText += `◦  *Order ID*: \`${fullOrderId}\`\n`;
-                replyText += `◦  *Nominal*: Rp${payment.amount.toLocaleString('id-ID')}\n`;
-                replyText += `◦  *Metode*: ${payment.payment_method}\n`;
-                replyText += `◦  *Status*: ${payment.status}\n`;
-                replyText += `◦  *Dibuat Pada*: ${new Date(payment.created_at).toLocaleString('id-ID')}\n`;
-                if (payment.completed_at) {
-                    replyText += `◦  *Selesai Pada*: ${new Date(payment.completed_at).toLocaleString('id-ID')}\n`;
+                replyText += `◦  *Nominal*: Rp${result.amount.toLocaleString('id-ID')}\n`;
+                replyText += `◦  *Metode*: ${result.payment_method}\n`;
+                replyText += `◦  *Status*: ${result.status}\n`;
+                // Corrected: The property is expired_at, not created_at
+                if (result.expired_at) {
+                    replyText += `◦  *Kedaluwarsa*: ${new Date(result.expired_at).toLocaleString('id-ID')}\n`;
                 }
-
+                if (result.completed_at) {
+                    replyText += `◦  *Selesai Pada*: ${new Date(result.completed_at).toLocaleString('id-ID')}\n`;
+                }
                 await ctx.reply(replyText);
             } else {
-                await ctx.reply(`Gagal mendapatkan informasi pembayaran. Pesan: ${result.message || 'Order ID tidak ditemukan.'}`);
+                 // This case might not be reached if SDK throws, but as a fallback:
+                await ctx.reply('Gagal mendapatkan informasi pembayaran. Order ID tidak ditemukan.');
             }
 
         } catch (error) {
             console.error(error);
-            await ctx.reply("Maaf, terjadi kesalahan internal saat memproses permintaan.");
+            await ctx.reply(`Maaf, terjadi kesalahan saat memproses permintaan: ${error.message}`);
         }
     }
 };
