@@ -1,4 +1,5 @@
 const tools = require("../../tools/exports.js");
+const config = require("../../config.json");
 
 module.exports = {
     name: "autopay",
