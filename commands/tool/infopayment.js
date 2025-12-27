@@ -6,11 +6,20 @@ module.exports = {
     category: "tool",
     code: async (ctx) => {
         try {
-            const orderId = ctx.args[0];
+            const fullOrderId = ctx.args[0];
 
             // Validate input
-            if (!orderId) {
-                return await ctx.reply("Silakan masukkan Order ID yang ingin diperiksa. Contoh: /infopayment TRX-12345A");
+            if (!fullOrderId || !fullOrderId.includes('-')) {
+                return await ctx.reply("Format Order ID tidak valid. Harap gunakan Order ID lengkap yang Anda terima. Contoh: /infopayment TRX-12345A-10000");
+            }
+
+            // Parse the combined order ID
+            const parts = fullOrderId.split('-');
+            const amount = parseInt(parts.pop(), 10);
+            const orderId = parts.join('-');
+
+            if (isNaN(amount)) {
+                return await ctx.reply("Format Order ID tidak valid: nominal tidak ditemukan.");
             }
 
             // Check for configuration
@@ -25,20 +34,20 @@ module.exports = {
             // Initialize Pakasir SDK
             const pakasir = new Pakasir({ slug, apikey });
 
-            // Get payment details
-            const result = await pakasir.getPaymentDetails(orderId);
+            // Get payment details using the correct method
+            const result = await pakasir.detailPayment(orderId, amount);
 
             // Check for success
             if (result && result.success && result.data) {
                 const payment = result.data;
                 let replyText = `✅ Informasi Pembayaran Ditemukan\n\n`;
-                replyText += `◦  *Order ID*: \`${payment.order_id}\`\n`;
+                replyText += `◦  *Order ID*: \`${fullOrderId}\`\n`;
                 replyText += `◦  *Nominal*: Rp${payment.amount.toLocaleString('id-ID')}\n`;
                 replyText += `◦  *Metode*: ${payment.payment_method}\n`;
                 replyText += `◦  *Status*: ${payment.status}\n`;
                 replyText += `◦  *Dibuat Pada*: ${new Date(payment.created_at).toLocaleString('id-ID')}\n`;
-                if (payment.paid_at) {
-                    replyText += `◦  *Dibayar Pada*: ${new Date(payment.paid_at).toLocaleString('id-ID')}\n`;
+                if (payment.completed_at) {
+                    replyText += `◦  *Selesai Pada*: ${new Date(payment.completed_at).toLocaleString('id-ID')}\n`;
                 }
 
                 await ctx.reply(replyText);

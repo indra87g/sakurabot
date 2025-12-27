@@ -6,11 +6,20 @@ module.exports = {
     category: "tool",
     code: async (ctx) => {
         try {
-            const orderId = ctx.args[0];
+            const fullOrderId = ctx.args[0];
 
             // Validate input
-            if (!orderId) {
-                return await ctx.reply("Silakan masukkan Order ID yang ingin dibatalkan. Contoh: /cancelpayment TRX-12345A");
+            if (!fullOrderId || !fullOrderId.includes('-')) {
+                return await ctx.reply("Format Order ID tidak valid. Harap gunakan Order ID lengkap yang Anda terima. Contoh: /cancelpayment TRX-12345A-10000");
+            }
+
+            // Parse the combined order ID
+            const parts = fullOrderId.split('-');
+            const amount = parseInt(parts.pop(), 10);
+            const orderId = parts.join('-');
+
+            if (isNaN(amount)) {
+                return await ctx.reply("Format Order ID tidak valid: nominal tidak ditemukan.");
             }
 
             // Check for configuration
@@ -26,11 +35,11 @@ module.exports = {
             const pakasir = new Pakasir({ slug, apikey });
 
             // Cancel the payment
-            const result = await pakasir.cancelPayment(orderId);
+            const result = await pakasir.cancelPayment(orderId, amount);
 
             // Check for success
             if (result && result.success) {
-                await ctx.reply(`✅ Permintaan pembatalan untuk Order ID \`${orderId}\` berhasil dikirim.`);
+                await ctx.reply(`✅ Permintaan pembatalan untuk Order ID \`${fullOrderId}\` berhasil dikirim.`);
             } else {
                 await ctx.reply(`Gagal membatalkan pembayaran. Pesan: ${result.message || 'Order ID tidak ditemukan atau pembayaran tidak dapat dibatalkan.'}`);
             }
