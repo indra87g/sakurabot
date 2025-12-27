@@ -8,9 +8,8 @@ module.exports = {
     category: "main",
     code: async (ctx) => {
         try {
-            const {
-                cmd
-            } = ctx.bot;
+            const { cmd } = ctx.bot;
+            const categoryArg = ctx.args[0]?.toLowerCase();
             const tag = {
                 "ai-chat": "AI (Chat)",
                 "ai-generate": "AI (Generate)",
@@ -37,34 +36,51 @@ module.exports = {
                 `➛ ${formatter.bold("Database")}: ${fs.existsSync(ctx.bot.databaseDir) ? tools.msg.formatSize(fs.readdirSync(ctx.bot.databaseDir).reduce((total, file) => total + fs.statSync(path.join(ctx.bot.databaseDir, file)).size, 0) / 1024) : "N/A"} (Simpl.DB with JSON)\n` +
                 `➛ ${formatter.bold("Library")}: @itsreimau/gktw (Fork of @mengkodingan/ckptw)\n` +
                 "\n" +
-                `☆ ${formatter.italic("Jangan lupa berdonasi agar bot tetap online.")}\n` +
-                `${"\u200E".repeat(4001)}\n`;
+                `☆ ${formatter.italic("Jangan lupa berdonasi agar bot tetap online.")}\n`;
 
-            for (const category of Object.keys(tag)) {
-                const cmds = Array.from(cmd.values()).filter(cmd => cmd.category === category).map(cmd => ({
-                    name: cmd.name,
-                    aliases: cmd.aliases,
-                    permissions: cmd.permissions || {}
+            // Check if a specific, valid category is requested
+            if (categoryArg && tag[categoryArg]) {
+                const cmds = Array.from(cmd.values()).filter(c => c.category === categoryArg).map(c => ({
+                    name: c.name,
+                    aliases: c.aliases,
+                    permissions: c.permissions || {}
                 }));
 
                 if (cmds.length > 0) {
-                    text += "╭┈┈┈┈┈┈ ♡\n" +
-                        `┊ ✿ — ${formatter.bold(tag[category])}\n`;
+                    text += `${"\u200E".repeat(4001)}\n` +
+                        "╭┈┈┈┈┈┈ ♡\n" +
+                        `┊ ✿ — ${formatter.bold(tag[categoryArg])}\n`;
 
-                    cmds.forEach(cmd => {
+                    cmds.forEach(c => {
                         let permissionsText = "";
-                        if (cmd.permissions.coin) permissionsText += "ⓒ";
-                        if (cmd.permissions.group) permissionsText += "Ⓖ";
-                        if (cmd.permissions.owner) permissionsText += "Ⓞ";
-                        if (cmd.permissions.premium) permissionsText += "Ⓟ";
-                        if (cmd.permissions.private) permissionsText += "ⓟ";
+                        if (c.permissions.coin) permissionsText += "ⓒ";
+                        if (c.permissions.group) permissionsText += "Ⓖ";
+                        if (c.permissions.owner) permissionsText += "Ⓞ";
+                        if (c.permissions.premium) permissionsText += "Ⓟ";
+                        if (c.permissions.private) permissionsText += "ⓟ";
 
-                        text += `┊ ➛ ${ctx.used.prefix + cmd.name} ${permissionsText}\n`;
+                        text += `┊ ➛ ${ctx.used.prefix + c.name} ${permissionsText}\n`;
                     });
+                    text += "╰┈┈┈┈┈┈\n";
+                } else {
+                    text += `\nTidak ada perintah yang tersedia dalam kategori "${tag[categoryArg]}".\n`;
+                }
+            } else {
+                 // If no category or an invalid category is provided, show the list of categories.
+                if (categoryArg) { // Invalid category was provided
+                    text += `\nKategori "${categoryArg}" tidak ditemukan.\n`;
                 }
 
+                text += `\nBerikut adalah daftar kategori perintah yang tersedia. Ketik ${ctx.used.prefix}menu <kategori> untuk melihat daftar perintah.\n\n` +
+                    "╭┈┈┈┈┈┈ ♡\n" +
+                    `┊ ✿ — ${formatter.bold("Kategori Perintah")}\n`;
+
+                Object.keys(tag).forEach(t => {
+                    text += `┊ ➛ ${t}\n`;
+                });
                 text += "╰┈┈┈┈┈┈\n";
             }
+
 
             await ctx.core.sendMessage(ctx.id, {
                 image: {
