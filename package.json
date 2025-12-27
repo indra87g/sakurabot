@@ -23,6 +23,7 @@
     "jimp": "^0.22.12",
     "link-preview-js": "^4.0.0",
     "moment-timezone": "^0.6.0",
+    "pakasir-sdk": "^1.0.5",
     "wa-sticker-formatter": "^4.4.4"
   }
 }
