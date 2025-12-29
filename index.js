@@ -38,6 +38,8 @@ if (config.system && config.system.useServer) {
 // Jalankan bot WhatsApp
 require("./main.js");
 
-// Jalankan bot Telegram
-const { launchTelegramBot } = require("./tg/index.js");
-launchTelegramBot();
+// Jalankan bot Telegram jika token ada
+if (config.bot && config.bot.botfather_token && config.bot.botfather_token !== 'YOUR_BOTFATHER_TOKEN') {
+    const { launchTelegramBot } = require("./tg/index.js");
+    launchTelegramBot();
+}
