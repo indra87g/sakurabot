@@ -7,7 +7,8 @@
         "newsletterJid": "120363416372653441@newsletter",
         "prefix": "/",
         "pakasir_slug": "your-slug-here",
-        "pakasir_apikey": "your-api-key-here"
+        "pakasir_apikey": "your-api-key-here",
+        "botfather_token": "YOUR_BOTFATHER_TOKEN"
     },
     "msg": {
         "admin": "Perintah hanya dapat diakses oleh admin grup!",
