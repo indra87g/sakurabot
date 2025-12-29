@@ -6,7 +6,8 @@
         "groupJid": "",
         "newsletterJid": "120363416372653441@newsletter",
         "prefix": "/",
-        "pakasir_slug": "your-slug-here"
+        "pakasir_slug": "your-slug-here",
+        "pakasir_apikey": "your-api-key-here"
     },
     "msg": {
         "admin": "Perintah hanya dapat diakses oleh admin grup!",
