@@ -35,4 +35,11 @@ if (config.system && config.system.useServer) {
     http.createServer((_, res) => res.end(`${pkg.name} berjalan di port ${port}`)).listen(port, () => consolefy.success(`${pkg.name} runs on port ${port}`));
 }
 
-require("./main.js"); // Jalankan modul utama
+// Jalankan bot WhatsApp
+require("./main.js");
+
+// Jalankan bot Telegram jika token ada
+if (config.bot && config.bot.botfather_token && config.bot.botfather_token !== 'YOUR_BOTFATHER_TOKEN') {
+    const { launchTelegramBot } = require("./tg/index.js");
+    launchTelegramBot();
+}
