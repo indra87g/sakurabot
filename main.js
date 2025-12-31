@@ -1,6 +1,6 @@
 // Impor modul dan dependensi yang diperlukan
 const middleware = require("./middleware.js");
-const events = require("./events/handler.js");
+const events = require("./wa/events/handler.js");
 const { Client, CommandHandler } = require("@itsreimau/gktw");
 const path = require("node:path");
 const util = require("node:util");
@@ -13,7 +13,7 @@ const {
 const diretory = {
     auth: path.resolve(__dirname, "state"),
     database: path.resolve(__dirname, "database"),
-    command: path.resolve(__dirname, "commands")
+    command: path.resolve(__dirname, "wa", "commands")
 };
 
 consolefy.log("Connecting..."); // Logging proses koneksi

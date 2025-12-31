@@ -35,11 +35,30 @@ if (config.system && config.system.useServer) {
     http.createServer((_, res) => res.end(`${pkg.name} berjalan di port ${port}`)).listen(port, () => consolefy.success(`${pkg.name} runs on port ${port}`));
 }
 
-// Jalankan bot WhatsApp
-require("./main.js");
+let isWaBotRunning = false;
+const isWaBotConfigValid = config.bot && config.bot.phoneNumber && config.bot.phoneNumber !== "YOUR_PHONE_NUMBER";
+const isTgBotConfigValid = config.bot && config.bot.botfather_token && config.bot.botfather_token !== "YOUR_BOTFATHER_TOKEN";
 
-// Jalankan bot Telegram jika token ada
-if (config.bot && config.bot.botfather_token && config.bot.botfather_token !== 'YOUR_BOTFATHER_TOKEN') {
+// Jalankan bot WhatsApp jika konfigurasi valid
+if (isWaBotConfigValid) {
+    try {
+        require("./main.js");
+        isWaBotRunning = true;
+    } catch (error) {
+        consolefy.error("Failed to start WhatsApp bot:", error);
+    }
+} else {
+    consolefy.warn("WhatsApp bot configuration is missing or invalid. Skipping...");
+}
+
+// Jalankan bot Telegram jika konfigurasi valid
+if (isTgBotConfigValid) {
     const { launchTelegramBot } = require("./tg/index.js");
-    launchTelegramBot();
+    launchTelegramBot(isWaBotRunning);
+} else {
+    consolefy.warn("Telegram bot configuration is missing or invalid. Skipping...");
+}
+
+if (!isWaBotConfigValid && !isTgBotConfigValid) {
+    consolefy.error("Both WhatsApp and Telegram bot configurations are invalid. Exiting...");
 }

@@ -1,7 +1,7 @@
 const { Pakasir } = require("pakasir-sdk");
 const config = require("../config.json");
 
-const registerPaymentCommands = (bot) => {
+const registerPaymentCommands = (bot, { isOwner, isPremium }) => {
     bot.command('newpayment', async (ctx) => {
         try {
             const args = ctx.message.text.split(' ');
@@ -140,6 +140,38 @@ const registerPaymentCommands = (bot) => {
         } catch (error) {
             console.error(error);
             await ctx.reply(`Maaf, terjadi kesalahan saat memproses permintaan pembatalan: ${error.message}`);
+        }
+    });
+
+    bot.command('newtesti', async (ctx) => {
+        if (!isOwner(ctx.from.id)) {
+            return ctx.reply('This command is for owners only.');
+        }
+
+        const args = ctx.message.text.split(' ').slice(1);
+        const [id_channel, id_transaksi, nama, harga, buyer, ...pesan_tambahan_parts] = args;
+        const pesan_tambahan = pesan_tambahan_parts.join(' ');
+
+        if (!id_channel || !id_transaksi || !nama || !harga || !buyer) {
+            return ctx.reply('Usage: /newtesti {id_channel} {id_transaksi} {nama} {harga} {buyer} {pesan_tambahan}');
+        }
+
+        const message = `Done wak😹
+
+ID Transaksi: ${id_transaksi}
+Nama Item: ${nama}
+Harga: ${harga}
+Buyer: ${buyer}
+
+${pesan_tambahan}
+        `;
+
+        try {
+            await bot.telegram.sendMessage(id_channel, message);
+            ctx.reply('Testimonial sent successfully!');
+        } catch (error) {
+            console.error('Failed to send testimonial:', error);
+            ctx.reply('Failed to send testimonial. Please check the channel ID and make sure the bot has permission to post.');
         }
     });
 };
