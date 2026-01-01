@@ -148,15 +148,16 @@ const registerPaymentCommands = (bot, { isOwner, isPremium }) => {
             return ctx.reply('This command is for owners only.');
         }
 
-        const args = ctx.message.text.split(' ').slice(1);
-        const [id_channel, id_transaksi, nama, harga, buyer, ...pesan_tambahan_parts] = args;
-        const pesan_tambahan = pesan_tambahan_parts.join(' ');
+        try {
+            const args = ctx.message.text.split(' ').slice(1);
+            const [id_channel, id_transaksi, nama, harga, buyer, ...pesan_tambahan_parts] = args;
+            const pesan_tambahan = pesan_tambahan_parts.join(' ');
 
-        if (!id_channel || !id_transaksi || !nama || !harga || !buyer) {
-            return ctx.reply('Usage: /newtesti {id_channel} {id_transaksi} {nama} {harga} {buyer} {pesan_tambahan}');
-        }
+            if (!id_channel || !id_transaksi || !nama || !harga || !buyer) {
+                return ctx.reply('Usage: /newtesti {id_channel} {id_transaksi} {nama} {harga} {buyer} {pesan_tambahan}');
+            }
 
-        const message = `Done wak😹
+            const caption = `Done wak😹
 
 ID Transaksi: ${id_transaksi}
 Nama Item: ${nama}
@@ -164,12 +165,18 @@ Harga: ${harga}
 Buyer: ${buyer}
 
 ${pesan_tambahan}
-        `;
+            `;
 
-        try {
-            await bot.telegram.sendMessage(id_channel, message);
+            if (ctx.message.reply_to_message && ctx.message.reply_to_message.photo) {
+                const photo = ctx.message.reply_to_message.photo.pop().file_id;
+                await bot.telegram.sendPhoto(id_channel, photo, { caption });
+            } else {
+                await bot.telegram.sendMessage(id_channel, caption);
+            }
+
             ctx.reply('Testimonial sent successfully!');
-        } catch (error) {
+        } catch (error)
+{
             console.error('Failed to send testimonial:', error);
             ctx.reply('Failed to send testimonial. Please check the channel ID and make sure the bot has permission to post.');
         }

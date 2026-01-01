@@ -10,9 +10,33 @@ const readJsonFile = (filePath) => {
         const data = fs.readFileSync(path.resolve(__dirname, filePath), 'utf8');
         return JSON.parse(data);
     } catch (error) {
+        if (error.code === 'ENOENT') {
+            return [];
+        }
         console.error(`Error reading ${filePath}:`, error);
         return [];
     }
+};
+
+// Helper function to write JSON files
+const writeJsonFile = (filePath, data) => {
+    try {
+        fs.writeFileSync(path.resolve(__dirname, filePath), JSON.stringify(data, null, 2), 'utf8');
+    } catch (error) {
+        console.error(`Error writing to ${filePath}:`, error);
+    }
+};
+
+// Middleware to save user IDs
+const addUserMiddleware = (ctx, next) => {
+    if (ctx.from && ctx.from.id) {
+        const users = readJsonFile('users.json');
+        if (!users.includes(ctx.from.id)) {
+            users.push(ctx.from.id);
+            writeJsonFile('users.json', users);
+        }
+    }
+    return next();
 };
 
 // Middleware to check for banned users
@@ -36,18 +60,26 @@ const isPremium = (userId) => {
 };
 
 
-const launchTelegramBot = (isWaBotRunning) => {
+const launchTelegramBot = () => {
   const token = config.bot.botfather_token;
   const bot = new Telegraf(token);
 
-  // Use the ban middleware
+  // Use middlewares
   bot.use(banMiddleware);
+  bot.use(addUserMiddleware);
 
   // Register payment commands, passing the helper functions
   registerPaymentCommands(bot, { isOwner, isPremium });
 
-  bot.start((ctx) => ctx.reply('Welcome!'));
-  bot.help((ctx) => ctx.reply('Send /newpayment <amount> to create a payment.'));
+  // Dynamically load commands
+  const commandsDir = path.resolve(__dirname, 'commands');
+  fs.readdirSync(commandsDir).forEach(file => {
+      if (file.endsWith('.js')) {
+          const command = require(path.join(commandsDir, file));
+          bot.command(command.name, command.code);
+      }
+  });
+
 
   bot.command('cekid', (ctx) => {
     ctx.reply(`Your Telegram ID is: ${ctx.from.id}`);
@@ -58,7 +90,7 @@ const launchTelegramBot = (isWaBotRunning) => {
     ctx.reply('Pinging...').then((sentMessage) => {
       const endTime = new Date();
       const latency = endTime - startTime;
-      const waBotStatus = isWaBotRunning ? 'Online' : 'Offline';
+      const waBotStatus = global.botStatus.wa ? 'Online' : 'Offline';
       ctx.telegram.editMessageText(
         ctx.chat.id,
         sentMessage.message_id,

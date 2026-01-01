@@ -1,4 +1,3 @@
-// Impor modul dan dependensi yang diperlukan
 const pkg = require("./package.json");
 const { Config, Consolefy, Formatter } = require("@itsreimau/gktw");
 const CFonts = require("cfonts");
@@ -6,19 +5,21 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
-// Tetapkan variabel global
 Object.assign(global, {
     config: new Config(path.resolve(__dirname, "config.json")),
     consolefy: new Consolefy({
         tag: pkg.name
     }),
     formatter: Formatter,
-    tools: require("./tools/exports.js")
+    tools: require("./tools/exports.js"),
+    botStatus: {
+        wa: false,
+        tg: false
+    }
 });
 
-consolefy.log("Starting..."); // Logging proses awal
+consolefy.log("Starting...");
 
-// Tampilkan nama proyek serta deskripsi lain
 CFonts.say(pkg.name, {
     colors: ["#00A1E0", "#00FFFF"],
     align: "center"
@@ -29,21 +30,18 @@ CFonts.say(`${pkg.description} - By ${pkg.author}`, {
     align: "center"
 });
 
-// Jalankan server jika diaktifkan dalam konfigurasi
 if (config.system && config.system.useServer) {
     const port = config.system.port;
     http.createServer((_, res) => res.end(`${pkg.name} berjalan di port ${port}`)).listen(port, () => consolefy.success(`${pkg.name} runs on port ${port}`));
 }
 
-let isWaBotRunning = false;
 const isWaBotConfigValid = config.bot && config.bot.phoneNumber && config.bot.phoneNumber !== "YOUR_PHONE_NUMBER";
 const isTgBotConfigValid = config.bot && config.bot.botfather_token && config.bot.botfather_token !== "YOUR_BOTFATHER_TOKEN";
 
-// Jalankan bot WhatsApp jika konfigurasi valid
 if (isWaBotConfigValid) {
     try {
         require("./main.js");
-        isWaBotRunning = true;
+        global.botStatus.wa = true;
     } catch (error) {
         consolefy.error("Failed to start WhatsApp bot:", error);
     }
@@ -51,10 +49,14 @@ if (isWaBotConfigValid) {
     consolefy.warn("WhatsApp bot configuration is missing or invalid. Skipping...");
 }
 
-// Jalankan bot Telegram jika konfigurasi valid
 if (isTgBotConfigValid) {
-    const { launchTelegramBot } = require("./tg/index.js");
-    launchTelegramBot(isWaBotRunning);
+    try {
+        const { launchTelegramBot } = require("./tg/index.js");
+        launchTelegramBot();
+        global.botStatus.tg = true;
+    } catch (error) {
+        consolefy.error("Failed to start Telegram bot:", error);
+    }
 } else {
     consolefy.warn("Telegram bot configuration is missing or invalid. Skipping...");
 }
