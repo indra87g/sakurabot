@@ -17,9 +17,10 @@ const readJsonFile = (filePath) => {
 
 // Middleware to check for banned users
 const banMiddleware = (ctx, next) => {
-    if (ctx.from && ctx.from.id) {
+    const userId = ctx.from?.id;
+    if (userId) {
         const bannedUsers = readJsonFile('bans.json');
-        if (bannedUsers.includes(ctx.from.id)) {
+        if (bannedUsers.includes(userId)) {
             return ctx.reply('You are banned from using this bot.');
         }
     }
@@ -52,7 +53,12 @@ const launchTelegramBot = (isWaBotRunning) => {
   bot.help((ctx) => ctx.reply('Send /newpayment <amount> to create a payment.'));
 
   bot.command('cekid', (ctx) => {
-    ctx.reply(`Your Telegram ID is: ${ctx.from.id}`);
+    const userId = ctx.from?.id;
+    if (userId) {
+        ctx.reply(`Your Telegram ID is: ${userId}`);
+    } else {
+        ctx.reply("I couldn't determine your Telegram ID.");
+    }
   });
 
   bot.command('ping', (ctx) => {
