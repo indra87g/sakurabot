@@ -17,9 +17,11 @@ const readJsonFile = (filePath) => {
 
 // Middleware to check for banned users
 const banMiddleware = (ctx, next) => {
-    const bannedUsers = readJsonFile('bans.json');
-    if (bannedUsers.includes(ctx.from.id)) {
-        return ctx.reply('You are banned from using this bot.');
+    if (ctx.from && ctx.from.id) {
+        const bannedUsers = readJsonFile('bans.json');
+        if (bannedUsers.includes(ctx.from.id)) {
+            return ctx.reply('You are banned from using this bot.');
+        }
     }
     return next();
 };
