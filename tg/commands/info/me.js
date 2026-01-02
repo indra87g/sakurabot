@@ -1,15 +1,15 @@
 module.exports = {
     name: 'me',
     description: 'Get your user information.',
-    code: (ctx, { isOwner, isPremium, getCoins }) => {
+    code: (ctx, { isOwner, isPremium, getCoins, escapeMarkdown }) => {
         const user = ctx.from;
         if (!user) {
             return ctx.reply('Could not get user information.');
         }
 
         const userId = user.id;
-        const name = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
-        const username = user.username ? `@${user.username}` : 'N/A';
+        const name = escapeMarkdown(user.first_name + (user.last_name ? ` ${user.last_name}` : ''));
+        const username = user.username ? escapeMarkdown(`@${user.username}`) : 'N/A';
         const coins = getCoins(userId);
 
         let status = 'User';

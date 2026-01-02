@@ -1,7 +1,7 @@
 module.exports = {
     name: 'broadcastgc',
     description: 'Broadcast a message to all registered groups.',
-    code: async (ctx, { isOwner, isPremium, getCoins, updateCoins, readJsonFile }) => {
+    code: async (ctx, { isOwner, isPremium, getCoins, updateCoins, readJsonFile, escapeMarkdown }) => {
         const userId = ctx.from.id;
         const args = ctx.message.text.split(' ').slice(1);
         const message = args.join(' ');
@@ -33,7 +33,8 @@ module.exports = {
 
         for (const groupId of groups) {
             try {
-                await ctx.telegram.sendMessage(groupId, `📢 *Broadcast Message* 📢\n\n${message}\n\n- Sent by ${ctx.from.first_name}`, { parse_mode: 'Markdown' });
+                const senderName = escapeMarkdown(ctx.from.first_name);
+                await ctx.telegram.sendMessage(groupId, `📢 *Broadcast Message* 📢\n\n${escapeMarkdown(message)}\n\n- Sent by ${senderName}`, { parse_mode: 'Markdown' });
                 successCount++;
             } catch (error) {
                 console.error(`Failed to send message to group ${groupId}:`, error);

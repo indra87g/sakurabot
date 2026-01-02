@@ -110,6 +110,15 @@ const updateCoins = (userId, amount) => {
 };
 // -------------------------
 
+// Helper function to escape markdown characters for safe inclusion in messages
+const escapeMarkdown = (text) => {
+    if (typeof text !== 'string') {
+        return text;
+    }
+    // Escapes *, _, `, and [
+    return text.replace(/([_*`\[])/g, '\\$1');
+};
+
 
 const launchTelegramBot = () => {
   const token = config.bot.botfather_token;
@@ -121,7 +130,8 @@ const launchTelegramBot = () => {
       getCoins,
       updateCoins,
       readJsonFile,
-      writeJsonFile
+      writeJsonFile,
+      escapeMarkdown
   };
 
   // Use middlewares
