@@ -204,7 +204,10 @@ const launchTelegramBot = () => {
       return Markup.inlineKeyboard(buttons, { columns: 2 });
   };
 
-  const welcomeMessage = (ctx) => `Welcome, ${ctx.from.first_name}! Here are the available commands:`;
+  const welcomeMessage = (ctx) => {
+      const firstName = escapeMarkdown(ctx.from.first_name);
+      return `Welcome, ${firstName}! Here are the available commands:`;
+  };
 
   bot.command('start', (ctx) => {
       const randomImageUrl = `https://picsum.photos/1280/720?random=${Date.now()}`;
