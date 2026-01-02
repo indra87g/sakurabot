@@ -1,8 +1,9 @@
-const { Telegraf, Markup } = require('telegraf');
+const { Telegraf } = require('telegraf');
 const config = require('../config.json');
 const { registerPaymentCommands } = require('./payment.js');
 const fs = require('fs');
 const path = require('path');
+const moment = require('moment-timezone');
 
 // Helper function to read JSON files
 const readJsonFile = (filePath) => {
@@ -141,6 +142,9 @@ const launchTelegramBot = () => {
   // Register payment commands, passing the helper functions
   registerPaymentCommands(bot, helpers);
 
+  // Store commands in a map
+  bot.cmd = new Map();
+
   // Dynamically load commands from subdirectories
   const loadCommands = (dir) => {
       const files = fs.readdirSync(dir, { withFileTypes: true });
@@ -150,8 +154,16 @@ const launchTelegramBot = () => {
               loadCommands(fullPath);
           } else if (file.name.endsWith('.js')) {
               const command = require(fullPath);
-              if (command.name && command.name !== 'start') {
-                  // Pass helpers to the command code
+              if (command.name) {
+                  // Add category to the command object
+                  const category = path.basename(dir);
+                  command.category = category;
+                  bot.cmd.set(command.name, command);
+                  // Also register aliases
+                  if (command.aliases && Array.isArray(command.aliases)) {
+                      command.aliases.forEach(alias => bot.cmd.set(alias, command));
+                  }
+                  // Register the command with Telegraf
                   const commandCodeWithHelpers = (ctx) => command.code(ctx, helpers);
                   bot.command(command.name, commandCodeWithHelpers);
               }
@@ -160,94 +172,56 @@ const launchTelegramBot = () => {
   };
   loadCommands(path.resolve(__dirname, 'commands'));
 
+  // --- New /start command based on WA Bot's /menu ---
+  bot.command('start', async (ctx) => {
+      const startTime = Date.now();
+      const args = ctx.message.text.split(' ').slice(1);
+      const categoryArg = args[0]?.toLowerCase();
 
-  bot.command('ping', (ctx) => {
-    const startTime = new Date();
-    ctx.reply('Pinging...').then((sentMessage) => {
-      const endTime = new Date();
-      const latency = endTime - startTime;
-      const waBotStatus = global.botStatus.wa ? 'Online' : 'Offline';
-      ctx.telegram.editMessageText(
-        ctx.chat.id,
-        sentMessage.message_id,
-        null,
-        `Pong! Latency: ${latency}ms\nWhatsApp Bot: ${waBotStatus}`
-      );
-    });
-  });
+      const tag = {
+          "info": "Information",
+          "misc": "Miscellaneous",
+          "owner": "Owner"
+      };
 
-  // --- New Start Command with Inline Keyboard ---
+      // Category-specific view
+      if (categoryArg && tag[categoryArg]) {
+          let categoryText = "";
+          const cmds = Array.from(bot.cmd.values()).filter(c => c.category === categoryArg);
+          // Remove duplicates
+          const uniqueCmds = [...new Map(cmds.map(item => [item['name'], item])).values()];
 
-  const userCommandsText = `
-*User Commands:*
-/me - Show your user info
-/ping - Check bot latency
-/newpayment <amount> - Create a new payment
-/broadcastgc <message> - Broadcast to groups (costs coins)
-  `;
-
-  const ownerCommandsText = `
-*Owner Commands:*
-/broadcast <message> - Broadcast to all users
-/broadcastgc <message> - Broadcast to groups
-/addprem <user_id> - Add a premium user
-/ban <user_id> <hours> - Ban a user
-/givecoin <user_id> <amount> - Give coins to a user
-/eval <command> - Execute shell command
-  `;
-
-  const mainMenuKeyboard = (ctx) => {
-      const buttons = [Markup.button.callback('User Commands', 'show_user_commands')];
-      if (isOwner(ctx.from.id)) {
-          buttons.push(Markup.button.callback('Owner Commands', 'show_owner_commands'));
-      }
-      return Markup.inlineKeyboard(buttons, { columns: 2 });
-  };
-
-  const welcomeMessage = (ctx) => {
-      const firstName = escapeMarkdown(ctx.from.first_name);
-      return `Welcome, ${firstName}! Here are the available commands:`;
-  };
-
-  bot.command('start', (ctx) => {
-      const randomImageUrl = `https://picsum.photos/1280/720?random=${Date.now()}`;
-      ctx.replyWithPhoto(
-          { url: randomImageUrl },
-          {
-              caption: welcomeMessage(ctx),
-              parse_mode: 'Markdown',
-              reply_markup: mainMenuKeyboard(ctx).reply_markup
+          if (uniqueCmds.length > 0) {
+              categoryText += `*${tag[categoryArg]} Commands*\n\n`;
+              uniqueCmds.forEach(c => {
+                  categoryText += `➡️ /${c.name}\n`;
+              });
+          } else {
+              categoryText = `No commands found in category: ${tag[categoryArg]}`;
           }
-      );
-  });
-
-  // Action handlers for the buttons
-  bot.action('show_user_commands', (ctx) => {
-      ctx.editMessageCaption(userCommandsText, {
-          parse_mode: 'Markdown',
-          reply_markup: Markup.inlineKeyboard([
-              Markup.button.callback('⬅️ Back', 'main_menu')
-          ]).reply_markup
-      });
-  });
-
-  bot.action('show_owner_commands', (ctx) => {
-      if (!isOwner(ctx.from.id)) {
-          return ctx.answerCbQuery('You are not an owner.', { show_alert: true });
+          return await ctx.reply(categoryText);
       }
-      ctx.editMessageCaption(ownerCommandsText, {
-          parse_mode: 'Markdown',
-          reply_markup: Markup.inlineKeyboard([
-              Markup.button.callback('⬅️ Back', 'main_menu')
-          ]).reply_markup
-      });
-  });
 
-  bot.action('main_menu', (ctx) => {
-      ctx.editMessageCaption(welcomeMessage(ctx), {
-          parse_mode: 'Markdown',
-          reply_markup: mainMenuKeyboard(ctx).reply_markup
+      // Full menu view
+      const waBotStatus = global.botStatus.wa ? 'Online' : 'Offline';
+      const latency = Date.now() - startTime;
+      const firstName = escapeMarkdown(ctx.from.first_name);
+
+      let fullMenuText = `Hello, ${firstName}!\nI am the Telegram counterpart to ${config.bot.name}.\n\n`;
+      fullMenuText += `*Bot Status*\n`;
+      fullMenuText += `Latency: ${latency}ms\n`;
+      fullMenuText += `WhatsApp Bot: ${waBotStatus}\n\n`;
+
+      if (categoryArg) {
+          fullMenuText += `Category "${categoryArg}" not found.\n\n`;
+      }
+
+      fullMenuText += `Here are the available command categories. Type \`/start <category>\` to see the commands.\n\n`;
+      Object.keys(tag).forEach(t => {
+          fullMenuText += `➡️ ${t}\n`;
       });
+
+      await ctx.replyWithMarkdown(fullMenuText);
   });
 
 
