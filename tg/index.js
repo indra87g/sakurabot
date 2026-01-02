@@ -179,7 +179,8 @@ const launchTelegramBot = () => {
       const categoryArg = args[0]?.toLowerCase();
 
       const tag = {
-          "info": "Information",
+          "information": "Information",
+          "tool": "Tool",
           "misc": "Miscellaneous",
           "owner": "Owner"
       };
