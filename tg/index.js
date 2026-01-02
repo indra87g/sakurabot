@@ -204,14 +204,9 @@ const launchTelegramBot = () => {
       }
 
       // Full menu view
-      const waBotStatus = global.botStatus.wa ? 'Online' : 'Offline';
-      const latency = Date.now() - startTime;
       const firstName = escapeMarkdown(ctx.from.first_name);
 
       let fullMenuText = `Hello, ${firstName}!\nI am the Telegram counterpart to ${config.bot.name}.\n\n`;
-      fullMenuText += `*Bot Status*\n`;
-      fullMenuText += `Latency: ${latency}ms\n`;
-      fullMenuText += `WhatsApp Bot: ${waBotStatus}\n\n`;
 
       if (categoryArg) {
           fullMenuText += `Category "${categoryArg}" not found.\n\n`;
