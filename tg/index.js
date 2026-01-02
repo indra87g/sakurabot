@@ -1,7 +1,6 @@
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const config = require('../config.json');
 const { registerPaymentCommands } = require('./payment.js');
-const { menuMiddleware } = require('./menu.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -128,7 +127,6 @@ const launchTelegramBot = () => {
   // Use middlewares
   bot.use(banMiddleware);
   bot.use(addUserMiddleware);
-  bot.use(menuMiddleware);
 
   // Register payment commands, passing the helper functions
   registerPaymentCommands(bot, helpers);
@@ -168,7 +166,77 @@ const launchTelegramBot = () => {
     });
   });
 
-  bot.command('start', (ctx) => menuMiddleware.replyToContext(ctx));
+  // --- New Start Command with Inline Keyboard ---
+
+  const userCommandsText = `
+*User Commands:*
+/me - Show your user info
+/ping - Check bot latency
+/newpayment <amount> - Create a new payment
+/broadcastgc <message> - Broadcast to groups (costs coins)
+  `;
+
+  const ownerCommandsText = `
+*Owner Commands:*
+/broadcast <message> - Broadcast to all users
+/broadcastgc <message> - Broadcast to groups
+/addprem <user_id> - Add a premium user
+/ban <user_id> <hours> - Ban a user
+/givecoin <user_id> <amount> - Give coins to a user
+/eval <command> - Execute shell command
+  `;
+
+  const mainMenuKeyboard = (ctx) => {
+      const buttons = [Markup.button.callback('User Commands', 'show_user_commands')];
+      if (isOwner(ctx.from.id)) {
+          buttons.push(Markup.button.callback('Owner Commands', 'show_owner_commands'));
+      }
+      return Markup.inlineKeyboard(buttons, { columns: 2 });
+  };
+
+  const welcomeMessage = (ctx) => `Welcome, ${ctx.from.first_name}! Here are the available commands:`;
+
+  bot.command('start', (ctx) => {
+      const randomImageUrl = `https://picsum.photos/1280/720?random=${Date.now()}`;
+      ctx.replyWithPhoto(
+          { url: randomImageUrl },
+          {
+              caption: welcomeMessage(ctx),
+              parse_mode: 'Markdown',
+              reply_markup: mainMenuKeyboard(ctx).reply_markup
+          }
+      );
+  });
+
+  // Action handlers for the buttons
+  bot.action('show_user_commands', (ctx) => {
+      ctx.editMessageCaption(userCommandsText, {
+          parse_mode: 'Markdown',
+          reply_markup: Markup.inlineKeyboard([
+              Markup.button.callback('⬅️ Back', 'main_menu')
+          ]).reply_markup
+      });
+  });
+
+  bot.action('show_owner_commands', (ctx) => {
+      if (!isOwner(ctx.from.id)) {
+          return ctx.answerCbQuery('You are not an owner.', { show_alert: true });
+      }
+      ctx.editMessageCaption(ownerCommandsText, {
+          parse_mode: 'Markdown',
+          reply_markup: Markup.inlineKeyboard([
+              Markup.button.callback('⬅️ Back', 'main_menu')
+          ]).reply_markup
+      });
+  });
+
+  bot.action('main_menu', (ctx) => {
+      ctx.editMessageCaption(welcomeMessage(ctx), {
+          parse_mode: 'Markdown',
+          reply_markup: mainMenuKeyboard(ctx).reply_markup
+      });
+  });
+
 
   bot.launch();
 
