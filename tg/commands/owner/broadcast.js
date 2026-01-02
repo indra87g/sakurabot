@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const config = require('../../config.json');
+const config = require('../../../config.json');
 
 const isOwner = (userId) => {
     return config.bot.tg_owner.includes(userId);
