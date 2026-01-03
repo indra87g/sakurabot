@@ -17,6 +17,34 @@ module.exports = {
     category: 'information',
     aliases: ['help'],
     code: async (ctx, { db, bot }) => {
+        const args = ctx.message.text.split(' ').slice(1);
+        const categoryArg = args[0]?.toLowerCase();
+
+        // Group commands by category first
+        const commandsByCategory = {};
+        for (const [name, command] of bot.cmd.entries()) {
+            // Avoid duplicates from aliases
+            if (name !== command.name) continue;
+
+            if (!commandsByCategory[command.category]) {
+                commandsByCategory[command.category] = [];
+            }
+            commandsByCategory[command.category].push(command.name);
+        }
+
+        // If a valid category is requested, show only that category's commands
+        if (categoryArg && commandsByCategory[categoryArg]) {
+            let categoryText = `*${categoryArg.charAt(0).toUpperCase() + categoryArg.slice(1)} Commands*\n\n`;
+            const commandList = commandsByCategory[categoryArg];
+
+            commandList.forEach(cmdName => {
+                categoryText += `➡️ /${cmdName}\n`;
+            });
+
+            return await ctx.reply(categoryText, { parse_mode: 'Markdown' });
+        }
+
+        // --- Full Menu Logic (if no valid category is specified) ---
         const userName = ctx.from.first_name;
         const botName = config.bot.name;
         const ownerName = config.owner.name;
@@ -48,16 +76,9 @@ module.exports = {
 ☆ Jangan lupa berdonasi agar bot tetap online.
 `;
 
-        // Group commands by category
-        const commandsByCategory = {};
-        for (const [name, command] of bot.cmd.entries()) {
-            // Avoid duplicates from aliases
-            if (name !== command.name) continue;
-
-            if (!commandsByCategory[command.category]) {
-                commandsByCategory[command.category] = [];
-            }
-            commandsByCategory[command.category].push(command.name);
+        // If an invalid category was passed, add a notice
+        if (categoryArg) {
+            menuText += `\n*Category "${categoryArg}" not found. Please choose from the list below.*\n`;
         }
 
         menuText += `
