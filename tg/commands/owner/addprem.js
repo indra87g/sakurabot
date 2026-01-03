@@ -1,7 +1,8 @@
 module.exports = {
     name: 'addprem',
+    category: 'owner',
     description: 'Add a user to the premium list.',
-    code: (ctx, { isOwner, readJsonFile, writeJsonFile }) => {
+    code: (ctx, { isOwner, db }) => {
         if (!isOwner(ctx.from.id)) {
             return ctx.reply('This command is only for the owner.');
         }
@@ -16,18 +17,17 @@ module.exports = {
             return ctx.reply('Invalid user ID.');
         }
 
-        const users = readJsonFile('users.json');
+        const users = db.get('users');
         if (!users.includes(userId)) {
             return ctx.reply('User has not started the bot yet. They need to start the bot first.');
         }
 
-        const premiumUsers = readJsonFile('premium.json');
+        const premiumUsers = db.get('premium');
         if (premiumUsers.includes(userId)) {
             return ctx.reply('User is already a premium member.');
         }
 
-        premiumUsers.push(userId);
-        writeJsonFile('premium.json', premiumUsers);
+        db.push('premium', userId);
 
         ctx.reply(`User ${userId} has been added to the premium list.`);
     }

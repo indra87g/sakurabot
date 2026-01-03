@@ -1,14 +1,10 @@
 const { exec } = require('child_process');
-const config = require('../../../config.json');
-
-const isOwner = (userId) => {
-    return config.bot.tg_owner.includes(userId);
-};
 
 module.exports = {
     name: 'eval',
+    category: 'owner',
     description: 'Execute a shell command (owner only).',
-    code: (ctx) => {
+    code: async (ctx, { isOwner }) => {
         if (!isOwner(ctx.from.id)) {
             return ctx.reply('This command is for the owner only.');
         }
@@ -25,7 +21,7 @@ module.exports = {
             if (stderr) {
                 return ctx.reply(`Stderr: ${stderr}`);
             }
-            ctx.reply(`Output: ${stdout}`);
+            ctx.reply(`Output:\n${stdout}`);
         });
     }
 };

@@ -1,56 +1,29 @@
 const { Telegraf } = require('telegraf');
 const config = require('../config.json');
-const { registerPaymentCommands } = require('./payment.js');
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
+const { Database } = require('simpl.db');
 
-// Helper function to read JSON files
-const readJsonFile = (filePath) => {
-    const fullPath = path.resolve(__dirname, filePath);
-    try {
-        if (!fs.existsSync(fullPath)) {
-            // For lists like users, bans, premium, return array
-            if (filePath.endsWith('s.json') && !filePath.endsWith('coins.json')) {
-                return [];
-            }
-            // For objects like coins, return object
-            return {};
-        }
-        const data = fs.readFileSync(fullPath, 'utf8');
-        // Handle empty file case
-        if (data.trim() === '') {
-            if (filePath.endsWith('s.json') && !filePath.endsWith('coins.json')) {
-                return [];
-            }
-            return {};
-        }
-        return JSON.parse(data);
-    } catch (error) {
-        console.error(`Error reading ${filePath}:`, error);
-        if (filePath.endsWith('s.json') && !filePath.endsWith('coins.json')) {
-            return [];
-        }
-        return {};
-    }
-};
+const db = new Database({
+    dataFile: path.resolve(__dirname, 'database.json'),
+    autoSave: true,
+    tabSize: 2
+});
 
-// Helper function to write JSON files
-const writeJsonFile = (filePath, data) => {
-    try {
-        fs.writeFileSync(path.resolve(__dirname, filePath), JSON.stringify(data, null, 2), 'utf8');
-    } catch (error) {
-        console.error(`Error writing to ${filePath}:`, error);
-    }
-};
+// Initialize database if keys don't exist
+if (!db.has('users')) db.set('users', []);
+if (!db.has('bans')) db.set('bans', []);
+if (!db.has('premium')) db.set('premium', []);
+if (!db.has('groups')) db.set('groups', []);
+if (!db.has('coins')) db.set('coins', {});
 
 // Middleware to save user IDs
 const addUserMiddleware = (ctx, next) => {
     if (ctx.from && ctx.from.id) {
-        const users = readJsonFile('users.json');
+        const users = db.get('users');
         if (!users.includes(ctx.from.id)) {
-            users.push(ctx.from.id);
-            writeJsonFile('users.json', users);
+            db.push('users', ctx.from.id);
         }
     }
     return next();
@@ -63,7 +36,7 @@ const banMiddleware = (ctx, next) => {
     }
 
     const userId = ctx.from.id;
-    let bans = readJsonFile('bans.json');
+    let bans = db.get('bans');
     const now = new Date();
 
     // Filter out expired bans
@@ -74,7 +47,7 @@ const banMiddleware = (ctx, next) => {
 
     // If the list of bans changed, write it back
     if (activeBans.length < bans.length) {
-        writeJsonFile('bans.json', activeBans);
+        db.set('bans', activeBans);
     }
 
     const userBan = activeBans.find(ban => ban.id === userId);
@@ -94,20 +67,17 @@ const isOwner = (userId) => {
 
 // Helper function to check for premium
 const isPremium = (userId) => {
-    const premiumUsers = readJsonFile('premium.json');
+    const premiumUsers = db.get('premium');
     return premiumUsers.includes(userId);
 };
 
 // --- Coin System Helpers ---
 const getCoins = (userId) => {
-    const coins = readJsonFile('coins.json');
-    return coins[userId] || 0;
+    return db.get(`coins.${userId}`) || 0;
 };
 
 const updateCoins = (userId, amount) => {
-    const coins = readJsonFile('coins.json');
-    coins[userId] = amount;
-    writeJsonFile('coins.json', coins);
+    db.set(`coins.${userId}`, amount);
 };
 // -------------------------
 
@@ -125,22 +95,20 @@ const launchTelegramBot = () => {
   const token = config.bot.botfather_token;
   const bot = new Telegraf(token);
 
+  global.botStartTime = Date.now(); // Store start time for uptime calculation
+
   const helpers = {
       isOwner,
       isPremium,
       getCoins,
       updateCoins,
-      readJsonFile,
-      writeJsonFile,
-      escapeMarkdown
+      escapeMarkdown,
+      db // Pass the db instance
   };
 
   // Use middlewares
   bot.use(banMiddleware);
   bot.use(addUserMiddleware);
-
-  // Register payment commands, passing the helper functions
-  registerPaymentCommands(bot, helpers);
 
   // Store commands in a map
   bot.cmd = new Map();
@@ -153,71 +121,42 @@ const launchTelegramBot = () => {
           if (file.isDirectory()) {
               loadCommands(fullPath);
           } else if (file.name.endsWith('.js')) {
-              const command = require(fullPath);
-              if (command.name) {
-                  // Add category to the command object
-                  const category = path.basename(dir);
-                  command.category = category;
-                  bot.cmd.set(command.name, command);
-                  // Also register aliases
-                  if (command.aliases && Array.isArray(command.aliases)) {
-                      command.aliases.forEach(alias => bot.cmd.set(alias, command));
-                  }
-                  // Register the command with Telegraf
-                  const commandCodeWithHelpers = (ctx) => command.code(ctx, helpers);
-                  bot.command(command.name, commandCodeWithHelpers);
+              try {
+                const command = require(fullPath);
+                if (command.name) {
+                    // Add category to the command object
+                    const category = path.basename(dir);
+                    command.category = category;
+                    bot.cmd.set(command.name, command);
+                    // Also register aliases
+                    if (command.aliases && Array.isArray(command.aliases)) {
+                        command.aliases.forEach(alias => bot.cmd.set(alias, command));
+                    }
+                    // Register the command with Telegraf, passing helpers
+                    bot.command(command.name, (ctx) => command.code(ctx, helpers));
+                }
+              } catch (e) {
+                console.error(`Error loading command from ${fullPath}:`, e);
               }
           }
       }
   };
   loadCommands(path.resolve(__dirname, 'commands'));
 
-  // --- New /start command based on WA Bot's /menu ---
+  // Attach bot.cmd to helpers so menu can access it
+  helpers.bot = bot;
+
+  // --- /start command ---
   bot.command('start', async (ctx) => {
       const startTime = Date.now();
-      const args = ctx.message.text.split(' ').slice(1);
-      const categoryArg = args[0]?.toLowerCase();
-
-      const tag = {
-          "information": "Information",
-          "tool": "Tool",
-          "misc": "Miscellaneous",
-          "owner": "Owner"
-      };
-
-      // Category-specific view
-      if (categoryArg && tag[categoryArg]) {
-          let categoryText = "";
-          const cmds = Array.from(bot.cmd.values()).filter(c => c.category === categoryArg);
-          // Remove duplicates
-          const uniqueCmds = [...new Map(cmds.map(item => [item['name'], item])).values()];
-
-          if (uniqueCmds.length > 0) {
-              categoryText += `*${tag[categoryArg]} Commands*\n\n`;
-              uniqueCmds.forEach(c => {
-                  categoryText += `➡️ /${c.name}\n`;
-              });
-          } else {
-              categoryText = `No commands found in category: ${tag[categoryArg]}`;
-          }
-          return await ctx.reply(categoryText);
-      }
-
-      // Full menu view
-      const firstName = escapeMarkdown(ctx.from.first_name);
-
-      let fullMenuText = `Hello, ${firstName}!\nI am the Telegram counterpart to ${config.bot.name}.\n\n`;
-
-      if (categoryArg) {
-          fullMenuText += `Category "${categoryArg}" not found.\n\n`;
-      }
-
-      fullMenuText += `Here are the available command categories. Type \`/start <category>\` to see the commands.\n\n`;
-      Object.keys(tag).forEach(t => {
-          fullMenuText += `➡️ ${t}\n`;
-      });
-
-      await ctx.replyWithMarkdown(fullMenuText);
+      const sentMessage = await ctx.reply('Pinging...');
+      const endTime = Date.now();
+      await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          sentMessage.message_id,
+          null,
+          `Hello, ${ctx.from.first_name}!\nMy latency is ${endTime - startTime}ms.\n\nType /menu to see the list of available commands.`
+      );
   });
 
 
