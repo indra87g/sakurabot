@@ -1,7 +1,8 @@
 module.exports = {
     name: 'givecoin',
+    category: 'owner',
     description: 'Give coins to a user.',
-    code: (ctx, { isOwner, getCoins, updateCoins, readJsonFile }) => {
+    code: (ctx, { isOwner, db, getCoins, updateCoins }) => {
         if (!isOwner(ctx.from.id)) {
             return ctx.reply('This command is only for the owner.');
         }
@@ -18,7 +19,7 @@ module.exports = {
             return ctx.reply('Invalid user ID or amount.');
         }
 
-        const users = readJsonFile('users.json');
+        const users = db.get('users');
         if (!users.includes(userId)) {
             return ctx.reply('User has not started the bot yet. They need to start the bot first.');
         }

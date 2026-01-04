@@ -1,7 +1,8 @@
 module.exports = {
     name: 'ban',
+    category: 'owner',
     description: 'Ban a user for a specified time.',
-    code: (ctx, { isOwner, readJsonFile, writeJsonFile }) => {
+    code: (ctx, { isOwner, db }) => {
         if (!isOwner(ctx.from.id)) {
             return ctx.reply('This command is only for the owner.');
         }
@@ -18,7 +19,7 @@ module.exports = {
             return ctx.reply('Invalid user ID or duration. Hours must be a positive number.');
         }
 
-        const users = readJsonFile('users.json');
+        const users = db.get('users');
         if (!users.includes(userId)) {
             return ctx.reply('User has not started the bot yet. They need to start the bot first.');
         }
@@ -27,7 +28,7 @@ module.exports = {
             return ctx.reply('You cannot ban an owner.');
         }
 
-        const bans = readJsonFile('bans.json');
+        const bans = db.get('bans');
         const now = new Date();
         const banUntil = new Date(now.getTime() + hours * 60 * 60 * 1000);
 
@@ -35,7 +36,7 @@ module.exports = {
         const updatedBans = bans.filter(ban => ban.id !== userId);
         updatedBans.push({ id: userId, until: banUntil.toISOString() });
 
-        writeJsonFile('bans.json', updatedBans);
+        db.set('bans', updatedBans);
 
         ctx.reply(`User ${userId} has been banned for ${hours} hour(s). They will be unbanned on ${banUntil.toUTCString()}.`);
     }

@@ -1,28 +1,39 @@
 module.exports = {
     name: 'broadcastgc',
-    description: 'Broadcast a message to all registered groups.',
-    code: async (ctx, { isOwner, isPremium, getCoins, updateCoins, readJsonFile, escapeMarkdown }) => {
+    category: 'misc',
+    description: 'Broadcast a message to all registered groups. Costs coins.',
+    code: async (ctx, { isOwner, isPremium, getCoins, updateCoins, db, escapeMarkdown }) => {
         const userId = ctx.from.id;
-        const args = ctx.message.text.split(' ').slice(1);
-        const message = args.join(' ');
+        const message = ctx.message.text.split(' ').slice(1).join(' ');
 
         if (!message) {
             return ctx.reply('Usage: /broadcastgc {message}');
         }
 
-        const groups = readJsonFile('groups.json');
-        if (groups.length === 0) {
+        const groups = db.get('groups');
+        if (!groups || groups.length === 0) {
             return ctx.reply('There are no groups registered for broadcast.');
         }
 
-        const costPerGroup = isPremium(userId) ? 1 : 2;
+        // Determine cost per group
+        let costPerGroup = 2; // Default for regular users
+        if (isPremium(userId)) {
+            costPerGroup = 1;
+        }
+        if (isOwner(userId)) {
+            costPerGroup = 0;
+        }
+
         const totalCost = groups.length * costPerGroup;
         const userCoins = getCoins(userId);
 
+        // Check if the user can afford it
+        if (userCoins < totalCost) {
+            return ctx.reply(`You don't have enough coins. You need ${totalCost} coins (${costPerGroup} per group), but you only have ${userCoins}.`);
+        }
+
+        // Deduct coins if not an owner
         if (!isOwner(userId)) {
-            if (userCoins < totalCost) {
-                return ctx.reply(`You don't have enough coins. You need ${totalCost} coins, but you only have ${userCoins}.`);
-            }
             updateCoins(userId, userCoins - totalCost);
         }
 
