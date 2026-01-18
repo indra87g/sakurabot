@@ -83,11 +83,12 @@ module.exports = {
             });
             fullMenuText += "╰┈┈┈┈┈┈\n";
 
+            fullMenuText += `\n\nUntuk menghubungi owner, ketik ${ctx.used.prefix}owner.\nUntuk donasi, ketik ${ctx.used.prefix}donate.`;
+
             await ctx.core.sendMessage(ctx.id, {
                 image: {
                     url: "https://picsum.photos/536/354"
                 },
-                mimetype: tools.mime.lookup("png"),
                 caption: fullMenuText.trim(),
                 contextInfo: {
                     mentionedJid: [ctx.sender.jid],
@@ -104,19 +105,7 @@ module.exports = {
                         sourceUrl: config.bot.groupLink,
                         renderLargerThumbnail: true
                     }
-                },
-                footer: formatter.italic(config.msg.footer),
-                buttons: [{
-                    buttonId: `${ctx.used.prefix}owner`,
-                    buttonText: {
-                        displayText: "Hubungi Owner"
-                    }
-                }, {
-                    buttonId: `${ctx.used.prefix}donate`,
-                    buttonText: {
-                        displayText: "Donasi"
-                    }
-                }]
+                }
             }, {
                 quoted: tools.cmd.fakeQuotedText(config.msg.note)
             });
