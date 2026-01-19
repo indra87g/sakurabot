@@ -2,41 +2,61 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
+// Helper function to format bytes into KB, MB, etc.
+const formatSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// Helper function to format seconds into a readable duration
+const formatDuration = (seconds) => {
+    const d = Math.floor(seconds / (3600 * 24));
+    const h = Math.floor(seconds % (3600 * 24) / 3600);
+    const m = Math.floor(seconds % 3600 / 60);
+    const s = Math.floor(seconds % 60);
+    return `${d} hari, ${h} jam, ${m} menit, ${s} detik`;
+};
+
 module.exports = {
     name: "server",
     category: "information",
-    code: async (ctx) => {
+    execute: async ({ m }) => {
         try {
             const totalMem = os.totalmem();
             const freeMem = os.freemem();
             const usedMem = totalMem - freeMem;
             const cpus = os.cpus();
+            const uptime = process.uptime();
 
-            await ctx.reply(
-                `➛ ${formatter.bold("OS")}: ${os.type()} (${os.platform()})\n` +
-                `➛ ${formatter.bold("Arch")}: ${os.arch()}\n` +
-                `➛ ${formatter.bold("Release")}: ${os.release()}\n` +
-                `➛ ${formatter.bold("Host")}: ${os.hostname()}\n` +
-                "\n" +
-                `➛ ${formatter.bold("Memori")}: ${tools.msg.formatSize(usedMem)}\n` +
-                `➛ ${formatter.bold("Bebas")}: ${tools.msg.formatSize(freeMem)}\n` +
-                `➛ ${formatter.bold("Total")}: ${tools.msg.formatSize(totalMem)}\n` +
-                "\n" +
-                `➛ ${formatter.bold("Model CPU")}: ${cpus[0].model}\n` +
-                `➛ ${formatter.bold("Kecepatan CPU")}: ${cpus[0].speed}\n` +
-                `➛ ${formatter.bold("Cores CPU")}: ${cpus.length}\n` +
-                `➛ ${formatter.bold("Muat Rata-Rata")}: ${os.loadavg().map(avg => avg.toFixed(2)).join(", ")}\n` +
-                "\n" +
-                `➛ ${formatter.bold("Versi NodeJS")}: ${process.version}\n` +
-                `➛ ${formatter.bold("Jalur Exec")}: ${process.execPath}\n` +
-                `➛ ${formatter.bold("PID")}: ${process.pid}\n` +
-                "\n" +
-                `➛ ${formatter.bold("Uptime")}: ${tools.msg.convertMsToDuration(Date.now() - ctx.me.readyAt)}\n` +
-                `➛ ${formatter.bold("Database")}: ${fs.existsSync(ctx.bot.databaseDir) ? tools.msg.formatSize(fs.readdirSync(ctx.bot.databaseDir).reduce((total, file) => total + fs.statSync(path.join(ctx.bot.databaseDir, file)).size, 0) / 1024) : "N/A"} (Simpl.DB with JSON)\n` +
-                `➛ ${formatter.bold("Library")}: @itsreimau/gktw (Fork of @mengkodingan/ckptw)`
-            );
+            const dbPath = path.resolve(__dirname, "..", "..", "..", "database", "wa");
+            const dbSize = fs.existsSync(dbPath) ? fs.readdirSync(dbPath).reduce((total, file) => total + fs.statSync(path.join(dbPath, file)).size, 0) : 0;
+
+            const serverInfoText =
+                `➛ *OS*: ${os.type()} (${os.platform()})\n` +
+                `➛ *Arch*: ${os.arch()}\n` +
+                `➛ *Release*: ${os.release()}\n` +
+                `➛ *Host*: ${os.hostname()}\n\n` +
+                `➛ *Memori*: ${formatSize(usedMem)}\n` +
+                `➛ *Bebas*: ${formatSize(freeMem)}\n` +
+                `➛ *Total*: ${formatSize(totalMem)}\n\n` +
+                `➛ *Model CPU*: ${cpus[0].model}\n` +
+                `➛ *Kecepatan CPU*: ${cpus[0].speed} MHz\n` +
+                `➛ *Cores CPU*: ${cpus.length}\n` +
+                `➛ *Muat Rata-Rata*: ${os.loadavg().map(avg => avg.toFixed(2)).join(", ")}\n\n` +
+                `➛ *Versi NodeJS*: ${process.version}\n` +
+                `➛ *Jalur Exec*: ${process.execPath}\n` +
+                `➛ *PID*: ${process.pid}\n\n` +
+                `➛ *Uptime*: ${formatDuration(uptime)}\n` +
+                `➛ *Database*: ${formatSize(dbSize)} (Simpl.DB with JSON)\n` +
+                `➛ *Library*: @rexxhayanasi/elaina-baileys`;
+
+            await m.reply(serverInfoText);
         } catch (error) {
-            await tools.cmd.handleError(ctx, error);
+            console.error("Error di server.js:", error);
+            m.reply("Terjadi kesalahan saat menampilkan info server.");
         }
     }
 };

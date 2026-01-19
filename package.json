@@ -17,7 +17,8 @@
   "author": "Ikbal Maulana (ItsReimau)",
   "license": "MIT",
   "dependencies": {
-    "@itsreimau/gktw": "github:itsreimau/gktw",
+    "@hapi/boom": "^10.0.1",
+    "@rexxhayanasi/elaina-baileys": "^1.2.2-rc.8",
     "archiver": "^7.0.1",
     "axios": "^1.13.2",
     "cfonts": "^3.3.1",
@@ -26,6 +27,7 @@
     "moment-timezone": "^0.6.0",
     "node-cron": "^3.0.3",
     "pakasir-sdk": "^1.0.5",
+    "pino": "^10.2.0",
     "simpl.db": "^2.13.0",
     "telegraf": "^4.16.3",
     "wa-sticker-formatter": "^3.6.0"

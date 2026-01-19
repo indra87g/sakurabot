@@ -1,36 +1,42 @@
-const { VCardBuilder } = require("@itsreimau/gktw");
+// Fungsi untuk membuat vCard string
+const createVCard = (name, org, number) => {
+    return `BEGIN:VCARD\n` +
+           `VERSION:3.0\n` +
+           `FN:${name}\n` +
+           `ORG:${org}\n` +
+           `TEL;type=CELL;type=VOICE;waid=${number}:${number}\n` +
+           `END:VCARD`;
+};
 
 module.exports = {
     name: "owner",
     aliases: ["creator", "developer"],
     category: "information",
-    code: async (ctx) => {
+    execute: async ({ bot, m }) => {
         try {
-            const owner = new VCardBuilder()
-                .setFullName(config.owner.name)
-                .setOrg(config.owner.organization)
-                .setNumber(config.owner.id)
-                .build();
-            const coOwners = config.owner.co && Array.isArray(config.owner.co) && config.owner.co.length > 0 ? config.owner.co.map(co => ({
-                displayName: co.name,
-                vcard: new VCardBuilder()
-                    .setFullName(co.name)
-                    .setOrg(co.organization || config.owner.organization)
-                    .setNumber(co.id)
-                    .build()
+            const owner = config.owner;
+            const ownerVCard = createVCard(owner.name, owner.organization, owner.id);
+
+            const coOwners = (owner.co && Array.isArray(owner.co)) ? owner.co.map(co => ({
+                vcard: createVCard(co.name, co.organization || owner.organization, co.id)
             })) : [];
 
-            await ctx.reply({
+            const contactsToSend = [
+                { vcard: ownerVCard },
+                ...coOwners
+            ];
+
+            const displayName = contactsToSend.length > 1 ? `${contactsToSend.length} Kontak Owner` : owner.name;
+
+            await bot.sendMessage(m.from, {
                 contacts: {
-                    displayName: coOwners.length > 0 ? "Owner Bot" : config.owner.name,
-                    contacts: [{
-                        displayName: config.owner.name,
-                        vcard: owner
-                    }, ...coOwners]
+                    displayName: displayName,
+                    contacts: contactsToSend
                 }
             });
         } catch (error) {
-            await tools.cmd.handleError(ctx, error);
+            console.error("Error di owner.js:", error);
+            m.reply("Terjadi kesalahan saat mengirim kontak owner.");
         }
     }
 };

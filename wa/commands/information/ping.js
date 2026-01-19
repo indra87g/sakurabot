@@ -2,15 +2,22 @@ module.exports = {
     name: "ping",
     aliases: ["p"],
     category: "information",
-    code: async (ctx) => {
+    execute: async ({ bot, m }) => {
         try {
             const startTime = performance.now();
-            const pongMsg = await ctx.reply(`ⓘ ${formatter.italic("Pong!")}`);
-            const responseTime = performance.now() - startTime;
+            const sentMsg = await m.reply("ⓘ _Pong!_");
+            const endTime = performance.now();
+            const responseTime = endTime - startTime;
+
             const tgBotStatus = global.botStatus.tg ? 'Online' : 'Offline';
-            await ctx.editMessage(pongMsg.key, `ⓘ ${formatter.italic(`Pong! Merespon dalam ${tools.msg.convertMsToDuration(responseTime)}.`)}\n\nTelegram Bot: ${tgBotStatus}`);
+
+            await bot.sendMessage(m.from, {
+                text: `ⓘ _Pong! Merespon dalam ${responseTime.toFixed(2)} ms._\n\nTelegram Bot: ${tgBotStatus}`,
+                edit: sentMsg.key
+            });
         } catch (error) {
-            await tools.cmd.handleError(ctx, error);
+            console.error("Error di ping.js:", error);
+            m.reply("Terjadi kesalahan saat menjalankan ping.");
         }
     }
 };

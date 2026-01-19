@@ -1,16 +1,21 @@
 const pkg = require("./package.json");
-const { Config, Consolefy, Formatter } = require("@itsreimau/gktw");
 const CFonts = require("cfonts");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
+// Membuat objek consolefy sederhana
+const consolefy = {
+    log: (text) => console.log(`[${pkg.name}] ${text}`),
+    error: (text, error) => console.error(`[${pkg.name}] ${text}`, error),
+    warn: (text) => console.warn(`[${pkg.name}] ${text}`),
+    success: (text) => console.log(`[${pkg.name}] \x1b[32m${text}\x1b[0m`),
+};
+
 Object.assign(global, {
-    config: new Config(path.resolve(__dirname, "config.json")),
-    consolefy: new Consolefy({
-        tag: pkg.name
-    }),
-    formatter: Formatter,
+    config: JSON.parse(fs.readFileSync(path.resolve(__dirname, "config.json"), "utf8")),
+    consolefy,
+    formatter: require("./tools/formatter.js"),
     tools: require("./tools/exports.js"),
     botStatus: {
         wa: false,

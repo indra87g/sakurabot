@@ -1,15 +1,18 @@
 const moment = require("moment-timezone");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("os");
+const { proto, generateWAMessageFromContent } = require("@rexxhayanasi/elaina-baileys");
 
 module.exports = {
     name: "menu",
     aliases: ["allmenu", "help", "list", "listmenu"],
     category: "main",
-    code: async (ctx) => {
+    execute: async ({ bot, m, args }) => {
         try {
-            const { cmd } = ctx.bot;
-            const categoryArg = ctx.args[0]?.toLowerCase();
+            const commands = bot.commands;
+            const categoryArg = args[0]?.toLowerCase();
+            const prefix = config.bot.prefix || "/";
             const tag = {
                 "ai-chat": "AI (Chat)",
                 "ai-generate": "AI (Generate)",
@@ -27,101 +30,85 @@ module.exports = {
                 misc: "Miscellaneous"
             };
 
-            // If a specific, valid category is requested, show only the command list.
             if (categoryArg && tag[categoryArg]) {
-                let categoryText = "";
-                const cmds = Array.from(cmd.values()).filter(c => c.category === categoryArg).map(c => ({
-                    name: c.name,
-                    aliases: c.aliases,
-                    permissions: c.permissions || {}
-                }));
-
-                if (cmds.length > 0) {
-                    categoryText += "╭┈┈┈┈┈┈ ♡\n" +
-                                  `┊ ✿ — ${formatter.bold(tag[categoryArg])}\n`;
-
-                    cmds.forEach(c => {
-                        let permissionsText = "";
-                        if (c.permissions.coin) permissionsText += "ⓒ";
-                        if (c.permissions.group) permissionsText += "Ⓖ";
-                        if (c.permissions.owner) permissionsText += "Ⓞ";
-                        if (c.permissions.premium) permissionsText += "Ⓟ";
-                        if (c.permissions.private) permissionsText += "ⓟ";
-
-                        categoryText += `┊ ➛ ${ctx.used.prefix + c.name} ${permissionsText}\n`;
-                    });
-                    categoryText += "╰┈┈┈┈┈┈\n";
-                } else {
-                    categoryText = `Tidak ada perintah yang tersedia dalam kategori "${tag[categoryArg]}".`;
+                const cmds = Array.from(commands.values()).filter(c => c.category === categoryArg);
+                if (cmds.length === 0) {
+                    return m.reply(`Tidak ada perintah dalam kategori "${tag[categoryArg]}".`);
                 }
-                // Reply with just the list, "to the point".
-                return await ctx.reply(categoryText.trim());
+                let categoryText = `╭┈┈┈┈┈┈ ♡\n┊ ✿ — *${tag[categoryArg]}*\n`;
+                cmds.forEach(c => {
+                    categoryText += `┊ ➛ ${prefix}${c.name}\n`;
+                });
+                categoryText += "╰┈┈┈┈┈┈\n";
+                return m.reply(categoryText.trim());
             }
 
-            // If no category or an invalid one is provided, show the full menu.
-            let fullMenuText = `— Halo, @${ctx.getId(ctx.sender.jid)}! Saya adalah bot WhatsApp bernama ${config.bot.name}, dimiliki oleh ${config.owner.name}. Saya bisa melakukan banyak perintah, seperti membuat stiker, menggunakan AI untuk pekerjaan tertentu, dan beberapa perintah berguna lainnya.\n` +
-                "\n" +
-                `➛ ${formatter.bold("Tanggal")}: ${moment.tz(config.system.timeZone).locale("id").format("dddd, DD MMMM YYYY")}\n` +
-                `➛ ${formatter.bold("Waktu")}: ${moment.tz(config.system.timeZone).format("HH.mm.ss")}\n` +
-                "\n" +
-                `➛ ${formatter.bold("Uptime")}: ${tools.msg.convertMsToDuration(Date.now() - ctx.me.readyAt)}\n` +
-                `➛ ${formatter.bold("Database")}: ${fs.existsSync(ctx.bot.databaseDir) ? tools.msg.formatSize(fs.readdirSync(ctx.bot.databaseDir).reduce((total, file) => total + fs.statSync(path.join(ctx.bot.databaseDir, file)).size, 0) / 1024) : "N/A"} (Simpl.DB with JSON)\n` +
-                `➛ ${formatter.bold("Library")}: @itsreimau/gktw (Fork of @mengkodingan/ckptw)\n` +
-                "\n" +
-                `☆ ${formatter.italic("Jangan lupa berdonasi agar bot tetap online.")}\n`;
+            const senderName = m.sender.split("@")[0];
+            const uptime = process.uptime();
+            const uptimeString = `${Math.floor(uptime / 3600)} jam, ${Math.floor((uptime % 3600) / 60)} menit, ${Math.floor(uptime % 60)} detik`;
+            const dbPath = path.resolve(__dirname, "..", "..", "..", "database", "wa");
+            const dbSize = fs.existsSync(dbPath) ? fs.readdirSync(dbPath).reduce((total, file) => total + fs.statSync(path.join(dbPath, file)).size, 0) : 0;
+            const dbSizeString = `${(dbSize / 1024).toFixed(2)} KB`;
 
-            if (categoryArg) { // Invalid category was provided
+            let fullMenuText = `— Halo, @${senderName}! Saya adalah bot WhatsApp bernama ${config.bot.name}, dimiliki oleh ${config.owner.name}.\n\n` +
+                `➛ *Tanggal*: ${moment.tz(config.system.timeZone).locale("id").format("dddd, DD MMMM YYYY")}\n` +
+                `➛ *Waktu*: ${moment.tz(config.system.timeZone).format("HH.mm.ss")}\n\n` +
+                `➛ *Uptime*: ${uptimeString}\n` +
+                `➛ *Database*: ${dbSizeString} (Simpl.DB with JSON)\n` +
+                `➛ *Library*: @rexxhayanasi/elaina-baileys\n\n` +
+                `☆ _Jangan lupa berdonasi agar bot tetap online._\n`;
+
+            if (categoryArg) {
                 fullMenuText += `\nKategori "${categoryArg}" tidak ditemukan.\n`;
             }
 
-            fullMenuText += `\nBerikut adalah daftar kategori perintah yang tersedia. Ketik ${ctx.used.prefix}menu <kategori> untuk melihat daftar perintah.\n\n` +
+            fullMenuText += `\nBerikut adalah daftar kategori perintah. Ketik ${prefix}menu <kategori> untuk melihat daftar perintah.\n\n` +
                 "╭┈┈┈┈┈┈ ♡\n" +
-                `┊ ✿ — ${formatter.bold("Kategori Perintah")}\n`;
-
+                `┊ ✿ — *Kategori Perintah*\n`;
             Object.keys(tag).forEach(t => {
                 fullMenuText += `┊ ➛ ${t}\n`;
             });
             fullMenuText += "╰┈┈┈┈┈┈\n";
 
-            await ctx.core.sendMessage(ctx.id, {
-                image: {
-                    url: "https://picsum.photos/536/354"
+            // Membuat pesan interaktif dengan tombol
+            const interactiveMessage = {
+                body: { text: fullMenuText.trim() },
+                footer: { text: `_${config.msg.footer}_` },
+                header: {
+                    title: config.bot.name,
+                    subtitle: "Menu Utama",
+                    hasMediaAttachment: true,
+                    imageMessage: {
+                        url: "https://picsum.photos/536/354"
+                    }
                 },
-                mimetype: tools.mime.lookup("png"),
-                caption: fullMenuText.trim(),
-                contextInfo: {
-                    mentionedJid: [ctx.sender.jid],
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: config.bot.newsletterJid,
-                        newsletterName: config.msg.footer
+                nativeFlowMessage: {
+                    buttons: [
+                        { name: "quick_reply", buttonParamsJson: JSON.stringify({ display_text: "Hubungi Owner", id: `${prefix}owner` }) },
+                        { name: "quick_reply", buttonParamsJson: JSON.stringify({ display_text: "Donasi", id: `${prefix}donate` }) }
+                    ]
+                }
+            };
+
+            const msg = generateWAMessageFromContent(m.from, {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadataVersion: 2,
+                            deviceListMetadata: {},
+                        },
+                        interactiveMessage,
                     },
-                    externalAdReply: {
-                        title: config.bot.name,
-                        body: config.msg.note,
-                        mediaType: 1,
-                        thumbnailUrl: config.bot.thumbnail,
-                        sourceUrl: config.bot.groupLink,
-                        renderLargerThumbnail: true
-                    }
                 },
-                footer: formatter.italic(config.msg.footer),
-                buttons: [{
-                    buttonId: `${ctx.used.prefix}owner`,
-                    buttonText: {
-                        displayText: "Hubungi Owner"
-                    }
-                }, {
-                    buttonId: `${ctx.used.prefix}donate`,
-                    buttonText: {
-                        displayText: "Donasi"
-                    }
-                }]
             }, {
-                quoted: tools.cmd.fakeQuotedText(config.msg.note)
+                mentions: [m.sender]
             });
+
+            await bot.relayMessage(m.from, msg.message, { messageId: msg.key.id });
+
         } catch (error) {
-            await tools.cmd.handleError(ctx, error);
+            console.error("Error di menu.js:", error);
+            m.reply("Terjadi kesalahan saat menampilkan menu.");
         }
     }
 };

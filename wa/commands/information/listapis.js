@@ -1,17 +1,22 @@
+const { listUrl } = require("../../../tools/api.js");
+
 module.exports = {
     name: "listapis",
     aliases: ["listapi"],
     category: "information",
-    code: async (ctx) => {
+    execute: async ({ m }) => {
         try {
-            const APIs = tools.api.listUrl();
-            let resultText = "";
+            const APIs = listUrl();
+            let resultText = "Berikut adalah daftar API yang digunakan:\n\n";
 
-            for (const [name, api] of Object.entries(APIs)) resultText += `➛ ${api.baseURL}\n`;
+            for (const api of Object.values(APIs)) {
+                resultText += `➛ ${api.baseURL}\n`;
+            }
 
-            await ctx.reply(resultText.trim());
+            await m.reply(resultText.trim());
         } catch (error) {
-            await tools.cmd.handleError(ctx, error);
+            console.error("Error di listapis.js:", error);
+            m.reply("Terjadi kesalahan saat menampilkan daftar API.");
         }
     }
 };

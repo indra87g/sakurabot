@@ -1,53 +1,105 @@
 // Impor modul dan dependensi yang diperlukan
-const middleware = require("./middleware.js");
-const events = require("./wa/events/handler.js");
-const { Client, CommandHandler } = require("@itsreimau/gktw");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@rexxhayanasi/elaina-baileys");
+const { Boom } = require("@hapi/boom");
+const pino = require("pino");
 const path = require("node:path");
+const fs = require("node:fs");
 const util = require("node:util");
+const aenpx = require('./tools/aenpx.js')
 
 // Konfigurasi bot
 const {
     bot: botConfig,
     system
 } = config;
-const diretory = {
+const directory = {
     auth: path.resolve(__dirname, "state"),
-    database: path.resolve(__dirname, "database", "wa"),
     command: path.resolve(__dirname, "wa", "commands")
 };
 
-consolefy.log("Connecting..."); // Logging proses koneksi
+// Fungsi untuk memulai bot
+async function startBot() {
+    consolefy.log("Connecting...");
 
-// Buat instance bot
-const bot = new Client({
-    auth: {
-        dir: diretory.auth,
-        phoneNumber: botConfig.phoneNumber,
-        usePairingCode: system.usePairingCode,
-        customPairingCode: system.customPairingCode,
-        useStore: system.useStore
-    },
-    connection: {
-        version: system?.WAVersion,
-        alwaysOnline: system.alwaysOnline,
-        selfReply: system.selfReply
-    },
-    messaging: {
-        autoRead: system.autoRead,
-        prefix: [botConfig?.prefix]
-    },
-    database: {
-        dir: diretory.database
-    },
-    owner: [config.owner.id, ...config.owner.co.map(co => co.id)]
-});
+    const { state, saveCreds } = await useMultiFileAuthState(directory.auth);
+    const { version, isLatest } = await fetchLatestBaileysVersion();
 
-// Inisialisasi event dan middleware
-events(bot);
-middleware(bot);
+    consolefy.log(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
 
-// Muat dan jalankan command handler
-const cmd = new CommandHandler(bot, diretory.command);
-cmd.load();
+    const bot = makeWASocket({
+        version,
+        logger: pino({ level: "silent" }),
+        printQRInTerminal: true,
+        auth: state,
+        browser: ["SakuraBot", "Safari", "1.0.0"],
+        patchMessageBeforeSending: (message) => {
+            const requiresPatch = !!(
+                message.buttonsMessage ||
+                message.templateMessage ||
+                message.listMessage
+            );
+            if (requiresPatch) {
+                message = {
+                    viewOnceMessage: {
+                        message: {
+                            messageContextInfo: {
+                                deviceListMetadataVersion: 2,
+                                deviceListMetadata: {},
+                            },
+                            ...message,
+                        },
+                    },
+                };
+            }
+            return message;
+        },
+    });
 
-bot.launch().catch(error => consolefy.error(`Error: ${util.format(error)}`)); // Luncurkan bot
+    // Command Handler Sederhana
+    bot.commands = new Map();
+    const commandFolders = fs.readdirSync(directory.command);
+    for (const folder of commandFolders) {
+        const commandFiles = fs.readdirSync(path.join(directory.command, folder)).filter(file => file.endsWith('.js'));
+        for (const file of commandFiles) {
+            try {
+                const command = require(path.join(directory.command, folder, file));
+                bot.commands.set(command.name, command);
+            } catch (error) {
+                consolefy.error(`Error loading command ${file}:`, error);
+            }
+        }
+    }
+
+    // Event listener untuk koneksi
+    bot.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === "close") {
+            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            consolefy.error("Connection closed due to ", lastDisconnect.error, ", reconnecting ", shouldReconnect);
+            if (shouldReconnect) {
+                startBot();
+            }
+        } else if (connection === "open") {
+            consolefy.success("Connection opened!");
+        }
+    });
+
+    // Menyimpan kredensial
+    bot.ev.on("creds.update", saveCreds);
+
+    // Event listener untuk pesan
+    bot.ev.on('messages.upsert', async (mek) => {
+        try {
+            const m = await aenpx(bot, mek)
+            if (!m.id.startsWith("BAE5") && !m.id.startsWith("3EB0")) return;
+            require('./handler.js')(bot, m)
+        } catch (e) {
+            console.log(e)
+        }
+    });
+
+    return bot;
+}
+
+// Menjalankan bot
+startBot().catch(error => consolefy.error(`Error: ${util.format(error)}`));
