@@ -1,4 +1,14 @@
 const axios = require("axios");
+const { createUrl } = require("../../../tools/api.js");
+const { isUrl, handleError } = require("../../../tools/cmd.js");
+const { Database } = require("simpl.db");
+const path = require("path");
+
+const db = new Database({
+    dataPath: path.join(__dirname, "..", "..", "..", "database", "wa", "users.json"),
+    autoSave: true,
+    tabSize: 2
+});
 
 module.exports = {
     name: "facebookdl",
@@ -7,33 +17,56 @@ module.exports = {
     permissions: {
         coin: 5
     },
-    code: async (ctx) => {
-        const url = ctx.args[0] || null;
+    execute: async ({ bot, m, args, isOwner }) => {
+        const url = args[0];
 
-        if (!url)
-            return await ctx.reply(
-                `${tools.msg.generateInstruction(["send"], ["text"])}\n` +
-                tools.msg.generateCmdExample(ctx.used, "https://www.facebook.com/reel/1112151989983701")
-            );
+        if (!url) {
+            return m.reply(`Contoh: ${config.bot.prefix}fb https://www.facebook.com/reel/1112151989983701`);
+        }
 
-        const isUrl = tools.cmd.isUrl(url);
-        if (!isUrl) return await ctx.reply(`ⓘ ${formatter.italic(config.msg.urlInvalid)}`);
+        if (!isUrl(url)) {
+            return m.reply("URL yang kamu berikan tidak valid.");
+        }
 
+        const userId = m.sender.split('@')[0];
+        const requiredCoins = module.exports.permissions.coin;
+
+        if (!isOwner) {
+            const userCoins = db.get(userId)?.coin || 0;
+            if (userCoins < requiredCoins) {
+                return m.reply(`Koin tidak cukup. Kamu butuh ${requiredCoins} koin, tapi hanya punya ${userCoins}.`);
+            }
+            db.sub(userId + ".coin", requiredCoins);
+        }
+
+        let initialMsg;
         try {
-            const apiUrl = tools.api.createUrl("deline", "/downloader/facebook", {
-                url
-            });
+            initialMsg = await m.reply("Mengunduh video dari Facebook...");
+
+            const apiUrl = createUrl("deline", "/downloader/facebook", { url });
             const result = (await axios.get(apiUrl)).data.result.download;
 
-            await ctx.reply({
-                video: {
-                    url: result
-                },
-                mimetype: tools.mime.lookup("mp4"),
-                caption: `➛ ${formatter.bold("URL")}: ${url}`
-            });
+            if (!result) {
+                return bot.sendMessage(m.from, { text: "Gagal mengunduh video. Mungkin URL tidak didukung.", edit: initialMsg.key });
+            }
+
+            await bot.sendMessage(m.from, {
+                video: { url: result },
+                mimetype: 'video/mp4',
+                caption: `➛ *URL*: ${url}`
+            }, { quoted: m });
+
+            // Hapus pesan "Mengunduh..." jika berhasil
+            await bot.sendMessage(m.from, { delete: initialMsg.key });
+
         } catch (error) {
-            await tools.cmd.handleError(ctx, error, true);
+            if (!isOwner) {
+                db.add(userId + ".coin", requiredCoins);
+            }
+            if (initialMsg) {
+                 await bot.sendMessage(m.from, { text: "Terjadi kesalahan saat mengunduh video.", edit: initialMsg.key });
+            }
+            await handleError(m, bot, error);
         }
     }
 };

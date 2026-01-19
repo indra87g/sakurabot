@@ -1,4 +1,33 @@
 const axios = require("axios");
+const { createUrl } = require("../../../tools/api.js");
+const { handleError } = require("../../../tools/cmd.js");
+const { Database } = require("simpl.db");
+const path = require("path");
+
+// Inisialisasi database di luar execute agar tidak dibuat ulang setiap kali
+const db = new Database({
+    dataPath: path.join(__dirname, "..", "..", "..", "database", "wa", "users.json"),
+    autoSave: true,
+    tabSize: 2
+});
+
+// Helper function untuk parsing flags
+const parseFlags = (args) => {
+    const flags = {};
+    const remainingArgs = [];
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === '-i' && args[i + 1] && !isNaN(args[i + 1])) {
+            flags.index = parseInt(args[i + 1]) - 1;
+            i++; // Lewati value
+        } else if (args[i] === '-s' && args[i + 1]) {
+            flags.source = args[i + 1].toLowerCase();
+            i++; // Lewati value
+        } else {
+            remainingArgs.push(args[i]);
+        }
+    }
+    return { flags, input: remainingArgs.join(' ') };
+};
 
 module.exports = {
     name: "play",
@@ -6,86 +35,94 @@ module.exports = {
     permissions: {
         coin: 5
     },
-    code: async (ctx) => {
-        const flag = ctx.flag({
-            "-i": {
-                type: "value",
-                key: "index",
-                validator: val => !isNaN(val) && parseInt(val) > 0,
-                parser: val => parseInt(val) - 1
-            },
-            "-s": {
-                type: "value",
-                key: "source",
-                validator: val => true,
-                parser: val => val.toLowerCase()
-            }
-        });
-        const input = flag.input;
+    execute: async ({ bot, m, args, isOwner }) => {
+        const { flags, input } = parseFlags(args);
 
-        if (!input)
-            return await ctx.reply(
-                `${tools.msg.generateInstruction(["send"], ["text"])}\n` +
-                `${tools.msg.generateCmdExample(ctx.used, "one last kiss - hikaru utada -i 8 -s spotify")}\n` +
-                tools.msg.generatesFlagInfo({
-                    "-i <number>": "Pilihan pada data indeks",
-                    "-s <text>": "Sumber untuk memutar lagu (tersedia: spotify, youtube | default: youtube)"
-                })
+        if (!input) {
+            return m.reply(
+                `Contoh: ${config.bot.prefix}play one last kiss -i 8 -s spotify\n\n` +
+                `Flags:\n` +
+                `-i <number>: Pilihan pada data indeks\n` +
+                `-s <text>: Sumber lagu (spotify, youtube)`
             );
+        }
+
+        const userId = m.sender.split('@')[0];
+        const requiredCoins = module.exports.permissions.coin;
+
+        if (!isOwner) {
+            const userCoins = db.get(userId)?.coin || 0;
+            if (userCoins < requiredCoins) {
+                return m.reply(`Koin tidak cukup. Kamu butuh ${requiredCoins} koin, tapi hanya punya ${userCoins}.`);
+            }
+            db.sub(userId + ".coin", requiredCoins);
+        }
 
         try {
-            const searchIndex = flag?.index || 0;
-            const source = flag?.source || null;
+            const searchIndex = flags.index || 0;
+            const source = flags.source || 'youtube';
+            let initialMsg;
 
             if (source === "spotify") {
-                const searchApiUrl = tools.api.createUrl("znx", "/api/search/spotify", {
-                    q: input
-                });
-                const searchResult = (await axios.get(searchApiUrl)).data.results.data[searchIndex];
+                initialMsg = await m.reply("Mencari lagu di Spotify...");
+                const searchApiUrl = createUrl("znx", "/api/search/spotify", { q: input });
+                const searchResponse = await axios.get(searchApiUrl);
+                const searchResult = searchResponse.data.results.data[searchIndex];
 
-                await ctx.reply(
-                    `➛ ${formatter.bold("Judul")}: ${searchResult.title}\n` +
-                    `➛ ${formatter.bold("Artis")}: ${searchResult.artist}\n` +
-                    `➛ ${formatter.bold("URL")}: ${searchResult.track_url}`
-                );
+                if (!searchResult) {
+                    return bot.sendMessage(m.from, { text: "Lagu tidak ditemukan.", edit: initialMsg.key });
+                }
 
-                const downloadApiUrl = tools.api.createUrl("deline", "/downloader/spotify", {
-                    url: searchResult.url
+                await bot.sendMessage(m.from, {
+                    text: `Ditemukan:\n\n` +
+                          `➛ *Judul*: ${searchResult.title}\n` +
+                          `➛ *Artis*: ${searchResult.artist}\n` +
+                          `➛ *URL*: ${searchResult.track_url}\n\n` +
+                          `Mengunduh audio...`,
+                    edit: initialMsg.key
                 });
+
+                const downloadApiUrl = createUrl("deline", "/downloader/spotify", { url: searchResult.url });
                 const downloadResult = (await axios.get(downloadApiUrl)).data.download;
 
-                await ctx.reply({
-                    audio: {
-                        url: downloadResult
-                    },
-                    mimetype: tools.mime.lookup("mp3")
-                });
-            } else {
-                const searchApiUrl = tools.api.createUrl("znx", "/api/search/youtube", {
-                    q: input
-                });
-                const searchResult = (await axios.get(searchApiUrl)).data.results.filter(res => res.type === "video")[searchIndex];
+                await bot.sendMessage(m.from, {
+                    audio: { url: downloadResult },
+                    mimetype: 'audio/mpeg'
+                }, { quoted: m });
 
-                await ctx.reply(
-                    `➛ ${formatter.bold("Judul")}: ${searchResult.title}\n` +
-                    `➛ ${formatter.bold("Artis")}: ${searchResult.author.name}\n` +
-                    `➛ ${formatter.bold("URL")}: ${searchResult.url}`
-                );
+            } else { // Default to YouTube
+                initialMsg = await m.reply("Mencari lagu di YouTube...");
+                const searchApiUrl = createUrl("znx", "/api/search/youtube", { q: input });
+                const searchResponse = await axios.get(searchApiUrl);
+                const searchResult = searchResponse.data.results.filter(res => res.type === "video")[searchIndex];
 
-                const downloadApiUrl = tools.api.createUrl("yp", "/api/downloader/ytmp3", {
-                    url: searchResult.url
+                if (!searchResult) {
+                    return bot.sendMessage(m.from, { text: "Video tidak ditemukan.", edit: initialMsg.key });
+                }
+
+                await bot.sendMessage(m.from, {
+                    text: `Ditemukan:\n\n` +
+                          `➛ *Judul*: ${searchResult.title}\n` +
+                          `➛ *Artis*: ${searchResult.author.name}\n` +
+                          `➛ *URL*: ${searchResult.url}\n\n` +
+                          `Mengunduh audio...`,
+                    edit: initialMsg.key
                 });
+
+                const downloadApiUrl = createUrl("yp", "/api/downloader/ytmp3", { url: searchResult.url });
                 const downloadResult = (await axios.get(downloadApiUrl)).data.data.download_url;
 
-                await ctx.reply({
-                    audio: {
-                        url: downloadResult
-                    },
-                    mimetype: tools.mime.lookup("mp3")
-                });
+                await bot.sendMessage(m.from, {
+                    audio: { url: downloadResult },
+                    mimetype: 'audio/mpeg'
+                }, { quoted: m });
             }
         } catch (error) {
-            await tools.cmd.handleError(ctx, error, true);
+            // Kembalikan koin jika terjadi error
+            if (!isOwner) {
+                db.add(userId + ".coin", requiredCoins);
+            }
+            await handleError(m, bot, error);
         }
     }
 };
