@@ -9,67 +9,57 @@ const pino = require("pino");
 const { Boom } = require("@hapi/boom");
 const path = require("path");
 const fs = require("fs");
-const { Database } = require("simpl.db");
 const handler = require("./handler");
+const { UserAccessService, EconomyService } = require("../src/services");
 
-// Database setup
-const dbPath = path.resolve(__dirname, '../database/wa');
-if (!fs.existsSync(dbPath)) fs.mkdirSync(dbPath, { recursive: true });
+const startWaBot = async (deps) => {
+    const { db, config, consolefy, tools, linkingService } = deps;
 
-const db = new Database({
-    dataFile: path.join(dbPath, 'database.json'),
-    autoSave: true,
-    tabSize: 2
-});
+    // Initialize platform services
+    const userAccess = new UserAccessService(db, config, 'wa');
+    const economy = new EconomyService(db, config);
 
-// Initialize database keys
-if (!db.has('users')) db.set('users', []);
-if (!db.has('premium')) db.set('premium', []);
-if (!db.has('managers')) db.set('managers', []);
-if (!db.has('sakuranite')) db.set('sakuranite', {});
-if (!db.has('inventory')) db.set('inventory', {});
-if (!db.has('last_daily')) db.set('last_daily', {});
-if (!db.has('links')) db.set('links', {});
-if (!db.has('mining_tickets')) db.set('mining_tickets', {});
-if (!db.has('mining_rate')) db.set('mining_rate', {});
+    const waBot = {
+        cmd: new Map(),
+        games: new Map(),
+        sessions: new Map(),
+        services: {
+            userAccess,
+            economy,
+            linking: linkingService
+        }
+    };
 
-const waBot = {
-    cmd: new Map(),
-    games: new Map(),
-    sessions: new Map()
-};
+    // Items definition
+    const { items_erekir: items } = require('../tools/items');
 
-// Items definition
-const { items_erekir: items } = require('../tools/items');
-
-// Helper function to load commands
-const loadCommands = (dir) => {
-    const files = fs.readdirSync(dir, { withFileTypes: true });
-    for (const file of files) {
-        const fullPath = path.join(dir, file.name);
-        if (file.isDirectory()) {
-            loadCommands(fullPath);
-        } else if (file.name.endsWith('.js')) {
-            try {
-                const command = require(fullPath);
-                if (command.name) {
-                    const category = path.basename(dir);
-                    command.category = category;
-                    waBot.cmd.set(command.name, command);
-                    if (command.aliases && Array.isArray(command.aliases)) {
-                        command.aliases.forEach(alias => waBot.cmd.set(alias, command));
+    // Helper function to load commands
+    const loadCommands = (dir) => {
+        const files = fs.readdirSync(dir, { withFileTypes: true });
+        for (const file of files) {
+            const fullPath = path.join(dir, file.name);
+            if (file.isDirectory()) {
+                loadCommands(fullPath);
+            } else if (file.name.endsWith('.js')) {
+                try {
+                    const command = require(fullPath);
+                    if (command.name) {
+                        const category = path.basename(dir);
+                        command.category = category;
+                        waBot.cmd.set(command.name, command);
+                        if (command.aliases && Array.isArray(command.aliases)) {
+                            command.aliases.forEach(alias => waBot.cmd.set(alias, command));
+                        }
                     }
+                } catch (e) {
+                    consolefy.error(`Error loading command from ${fullPath}:`, e);
                 }
-            } catch (e) {
-                consolefy.error(`Error loading command from ${fullPath}:`, e);
             }
         }
-    }
-};
+    };
 
-loadCommands(path.resolve(__dirname, 'commands'));
+    loadCommands(path.resolve(__dirname, 'commands'));
 
-const startWaBot = async () => {
     const { state, saveCreds } = await useMultiFileAuthState(path.resolve(__dirname, '../state'));
     const { version } = await fetchLatestBaileysVersion();
 
@@ -102,7 +92,7 @@ const startWaBot = async () => {
         if (connection === "close") {
             const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
             consolefy.error(`Connection closed due to ${lastDisconnect.error}, reconnecting: ${shouldReconnect}`);
-            if (shouldReconnect) startWaBot();
+            if (shouldReconnect) startWaBot(deps);
         } else if (connection === "open") {
             consolefy.success("WhatsApp bot connected!");
             global.botStatus.wa = true;
@@ -118,7 +108,7 @@ const startWaBot = async () => {
             if (m.key.fromMe) return;
 
             // Call message handler
-            await handler(sock, m, db, waBot, items);
+            await handler(sock, m, db, waBot, items, deps);
         } catch (err) {
             consolefy.error(err);
         }

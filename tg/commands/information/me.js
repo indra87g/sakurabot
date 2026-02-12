@@ -1,7 +1,7 @@
 module.exports = {
     name: 'me',
     description: 'Dapatkan informasi pengguna Anda.',
-    code: async (ctx, { isOwner, isPremium, getCoins, getGachaTickets, getSakuranite, getMiningTickets, getMiningRate, escapeHTML, db }) => {
+    code: async (ctx, { isOwner, isPremium, getCoins, getGachaTickets, getSakuranite, getMiningTickets, getMiningRate, escapeHTML, db, services }) => {
         const user = ctx.from;
         if (!user) {
             return ctx.reply('Tidak bisa mendapatkan informasi pengguna.');
@@ -24,7 +24,7 @@ module.exports = {
             status = 'Premium';
         }
 
-        // Info Rujukan
+        // Info Rujukan (Still using db for now as it's not in service yet)
         const referredBy = db.get(`referred_by.${userId}`);
         const referrals = db.get(`referrals.${userId}`) || [];
         let referredByText = 'N/A';
@@ -39,7 +39,7 @@ module.exports = {
 
         const referralLink = `https://t.me/${botUsername}?start=ref_${userId}`;
 
-        const link = db.get(`links.${userId}`);
+        const link = services.linking.getWaFromTg(userId);
         const linkStatus = link ? `✅ Terhubung (${link.split('@')[0]})` : '❌ Tidak Terhubung';
 
         const message = `

@@ -6,11 +6,13 @@ const fs = require("fs");
 const path = require("path");
 const middleware = require("./middleware");
 
-module.exports = async (sock, m, db, waBot, items) => {
+module.exports = async (sock, m, db, waBot, items, deps) => {
     const from = m.key.remoteJid;
     const sender = m.key.participant || m.key.remoteJid;
     const type = Object.keys(m.message)[0];
     const pushName = m.pushName || "User";
+
+    const { userAccess, economy, linking } = waBot.services;
 
     // Track users in database (Middleware)
     middleware.registerUser(db, sender);
@@ -32,41 +34,6 @@ module.exports = async (sock, m, db, waBot, items) => {
     const isCmd = body.startsWith(prefix);
     const commandName = isCmd ? body.slice(prefix.length).trim().split(" ")[0].toLowerCase() : "";
     const args = body.trim().split(/ +/).slice(1);
-
-    const getSakuranite = (jid) => {
-        return db.get(`sakuranite.${jid}`) || 0;
-    };
-
-    const updateSakuranite = (jid, amount) => {
-        db.set(`sakuranite.${jid}`, amount);
-    };
-    const getMiningTickets = (jid) => {
-        return db.get(`mining_tickets.${jid}`) || 0;
-    };
-
-    const updateMiningTickets = (jid, amount) => {
-        db.set(`mining_tickets.${jid}`, amount);
-    };
-
-    const getMiningRate = (jid) => {
-        return db.get(`mining_rate.${jid}`) || 0.10;
-    };
-
-    const updateMiningRate = (jid, amount) => {
-        db.set(`mining_rate.${jid}`, amount);
-    };
-
-
-    const getInventory = (jid) => {
-        return db.get(`inventory.${jid}`) || {};
-    };
-
-    const updateInventory = (jid, item, amount) => {
-        const inv = getInventory(jid);
-        inv[item] = (inv[item] || 0) + amount;
-        if (inv[item] <= 0) delete inv[item];
-        db.set(`inventory.${jid}`, inv);
-    };
 
     const getTarget = (m, args, types = ["quoted", "mentioned", "text"]) => {
         const type = Object.keys(m.message)[0];
@@ -218,19 +185,32 @@ module.exports = async (sock, m, db, waBot, items) => {
     };
 
     const helpers = {
-        getMiningTickets,
-        updateMiningTickets,
-        getMiningRate,
-        updateMiningRate,
+        // Economy methods
+        getSakuranite: (id) => economy.getSakuranite(id),
+        updateSakuranite: (id, amount) => economy.updateSakuranite(id, amount),
+        getCoins: (id) => economy.getCoins(id),
+        updateCoins: (id, amount) => economy.updateCoins(id, amount),
+        getGachaTickets: (id) => economy.getGachaTickets(id),
+        updateGachaTickets: (id, amount) => economy.updateGachaTickets(id, amount),
+        getMiningTickets: (id) => economy.getMiningTickets(id),
+        updateMiningTickets: (id, amount) => economy.updateMiningTickets(id, amount),
+        getMiningRate: (id) => economy.getMiningRate(id),
+        updateMiningRate: (id, amount) => economy.updateMiningRate(id, amount),
+        getInventory: (id) => economy.getInventory(id),
+        updateInventory: (id, item, amount) => economy.updateInventory(id, item, amount),
+
+        // Access methods
+        isLeader: (id) => userAccess.isLeader(id),
+        isManager: (id) => userAccess.isManager(id),
+        isOwner: (id) => userAccess.isOwner(id),
+        isPremium: (id) => userAccess.isPremium(id),
+        addManager: (id) => userAccess.addManager(id),
+        removeManager: (id) => userAccess.removeManager(id),
+        addPremium: (id) => userAccess.addPremium(id),
+        removePremium: (id) => userAccess.removePremium(id),
+
+        services: waBot.services,
         ctx,
-        isLeader: (jid) => middleware.isLeader(jid),
-        isManager: (jid) => middleware.isManager(db, jid),
-        isOwner: (jid) => middleware.isOwner(db, jid),
-        isPremium: (jid) => middleware.isPremium(db, jid),
-        getSakuranite,
-        updateSakuranite,
-        getInventory,
-        updateInventory,
         db,
         config,
         waBot,
@@ -253,8 +233,8 @@ module.exports = async (sock, m, db, waBot, items) => {
             body,
             sender,
             pushName || sender.split("@")[0],
-            updateSakuranite,
-            getSakuranite
+            helpers.updateSakuranite,
+            helpers.getSakuranite
         );
 
         if (result) {
@@ -275,18 +255,7 @@ module.exports = async (sock, m, db, waBot, items) => {
         if (session.type === 'linking' && /^\d{4}$/.test(body)) {
             if (body === session.code) {
                 // Link success
-                const waLinks = db.get('links') || {};
-                waLinks[sender] = session.tgId;
-                db.set('links', waLinks);
-
-                // Also update TG database
-                const { Database } = require('simpl.db');
-                const tgDbPath = path.resolve(__dirname, '../database/tg/database.json');
-                const tgDb = new Database({ dataFile: tgDbPath });
-                const tgLinks = tgDb.get('links') || {};
-                tgLinks[session.tgId] = sender;
-                tgDb.set('links', tgLinks);
-
+                linking.linkAccounts(sender, session.tgId);
                 waBot.sessions.delete(sender);
                 return await sock.sendMessage(from, { text: `✅ Integrasi berhasil! Akun WhatsApp Anda sekarang terhubung dengan ID Telegram ${session.tgId}.` }, { quoted: m });
             } else {

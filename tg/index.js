@@ -1,106 +1,21 @@
 const { Telegraf, Markup } = require('telegraf');
-const config = require('../config.json');
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
-
-const { Database } = require('simpl.db');
 const cron = require('node-cron');
 const archiver = require('archiver');
 const { Pakasir } = require('pakasir-sdk');
 const { items_serpulo: items } = require('../tools/items');
+const { UserAccessService, EconomyService } = require('../src/services');
 
-const dbPath = path.resolve(__dirname, '../database/tg');
-fs.mkdirSync(dbPath, { recursive: true });
-
-const db = new Database({
-    dataFile: path.join(dbPath, 'database.json'),
-    autoSave: true,
-    tabSize: 2
-});
-
-// Initialize database if keys don't exist
-if (!db.has('users')) db.set('users', []);
-if (!db.has('bans')) db.set('bans', []);
-if (!db.has('premium')) db.set('premium', []);
-if (!db.has('groups')) db.set('groups', []);
-if (!db.has('channels')) db.set('channels', []);
-if (!db.has('coins')) db.set('coins', {});
-if (!db.has('managers')) db.set('managers', []);
-if (!db.has('gacha_tickets')) db.set('gacha_tickets', {});
-if (!db.has('last_daily')) db.set('last_daily', {});
-if (!db.has('referred_by')) db.set('referred_by', {});
-if (!db.has('referrals')) db.set('referrals', {});
-if (!db.has('pending_referrals')) db.set('pending_referrals', {});
-if (!db.has('sakuranite')) db.set('sakuranite', {});
-if (!db.has('inventory')) db.set('inventory', {});
-if (!db.has('links')) db.set('links', {});
-if (!db.has('mining_tickets')) db.set('mining_tickets', {});
-if (!db.has('mining_rate')) db.set('mining_rate', {});
-
-// Helper function to check for leader
-const isLeader = (userId) => {
-    return config.owner.id_tele === userId.toString();
-};
-
-// Helper function to check for owner (leader or manager)
-const isOwner = (userId) => {
-    const managers = db.get('managers') || [];
-    return isLeader(userId) || managers.includes(userId);
-};
-
-// Helper function to check for premium
-const isPremium = (userId) => {
-    const premiumUsers = db.get('premium');
-    return premiumUsers.includes(userId);
-};
-
-// --- Coin System Helpers ---
-const getCoins = (userId) => {
-    return db.get(`coins.${userId}`) || 0;
-};
-
-const updateCoins = (userId, amount) => {
-    db.set(`coins.${userId}`, amount);
-};
-
-const getGachaTickets = (userId) => {
-    return db.get(`gacha_tickets.${userId}`) || 0;
-};
-
-const updateGachaTickets = (userId, amount) => {
-    db.set(`gacha_tickets.${userId}`, amount);
-};
-
-const getSakuranite = (userId) => {
-    return db.get(`sakuranite.${userId}`) || 0;
-};
-
-const updateSakuranite = (userId, amount) => {
-    db.set(`sakuranite.${userId}`, amount);
-};
-const getMiningTickets = (userId) => {
-    return db.get(`mining_tickets.${userId}`) || 0;
-};
-
-const updateMiningTickets = (userId, amount) => {
-    db.set(`mining_tickets.${userId}`, amount);
-};
-
-const getMiningRate = (userId) => {
-    return db.get(`mining_rate.${userId}`) || 0.10;
-};
-
-const updateMiningRate = (userId, amount) => {
-    db.set(`mining_rate.${userId}`, amount);
-};
-
-
-const userCooldowns = new Map();
-const activeTopups = new Map();
-
-const launchTelegramBot = () => {
+const launchTelegramBot = (deps) => {
+  const { db, config, consolefy, tools, linkingService } = deps;
   const { escapeHTML, formatUptime } = global;
+
+  // Initialize platform services
+  const userAccess = new UserAccessService(db, config, 'tg');
+  const economy = new EconomyService(db, config);
+
   const token = config.bot.botfather_token;
   const bot = new Telegraf(token);
   bot.games = new Map();
@@ -109,26 +24,46 @@ const launchTelegramBot = () => {
     apikey: config.pakasir.apikey
   });
 
+  const userCooldowns = new Map();
+  const activeTopups = new Map();
+
   const helpers = {
-      getMiningTickets,
-      updateMiningTickets,
-      getMiningRate,
-      updateMiningRate,
+      // Economy methods
+      getSakuranite: (id) => economy.getSakuranite(id),
+      updateSakuranite: (id, amount) => economy.updateSakuranite(id, amount),
+      getCoins: (id) => economy.getCoins(id),
+      updateCoins: (id, amount) => economy.updateCoins(id, amount),
+      getGachaTickets: (id) => economy.getGachaTickets(id),
+      updateGachaTickets: (id, amount) => economy.updateGachaTickets(id, amount),
+      getMiningTickets: (id) => economy.getMiningTickets(id),
+      updateMiningTickets: (id, amount) => economy.updateMiningTickets(id, amount),
+      getMiningRate: (id) => economy.getMiningRate(id),
+      updateMiningRate: (id, amount) => economy.updateMiningRate(id, amount),
+      getInventory: (id) => economy.getInventory(id),
+      updateInventory: (id, item, amount) => economy.updateInventory(id, item, amount),
+
+      // Access methods
+      isLeader: (id) => userAccess.isLeader(id),
+      isOwner: (id) => userAccess.isOwner(id),
+      isPremium: (id) => userAccess.isPremium(id),
+      addManager: (id) => userAccess.addManager(id),
+      removeManager: (id) => userAccess.removeManager(id),
+      addPremium: (id) => userAccess.addPremium(id),
+      removePremium: (id) => userAccess.removePremium(id),
+
+      // Service instances
+      services: {
+          userAccess,
+          economy,
+          linking: linkingService
+      },
+
       items,
       pakasir,
       activeTopups,
-      isLeader,
-      isOwner,
-      isPremium,
-      getCoins,
-      updateCoins,
-      getGachaTickets,
-      updateGachaTickets,
-      getSakuranite,
-      updateSakuranite,
       escapeHTML,
-      db, // Pass the db instance
-      config // Pass the full config
+      db,
+      config
   };
 
   // Import and use middlewares
@@ -153,8 +88,8 @@ const launchTelegramBot = () => {
               ctx.message.text,
               ctx.from.id,
               ctx.from.first_name,
-              updateSakuranite,
-              getSakuranite
+              helpers.updateSakuranite,
+              helpers.getSakuranite
           );
 
           if (result) {
@@ -186,15 +121,12 @@ const launchTelegramBot = () => {
               try {
                 const command = require(fullPath);
                 if (command.name) {
-                    // Add category to the command object
                     const category = path.basename(dir);
                     command.category = category;
                     bot.cmd.set(command.name, command);
-                    // Also register aliases
                     if (command.aliases && Array.isArray(command.aliases)) {
                         command.aliases.forEach(alias => bot.cmd.set(alias, command));
                     }
-                    // Register the command with Telegraf, passing helpers
                     bot.command(command.name, (ctx) => command.code(ctx, helpers));
                 }
               } catch (e) {
@@ -205,14 +137,10 @@ const launchTelegramBot = () => {
   };
   loadCommands(path.resolve(__dirname, 'commands'));
 
-  // Attach bot.cmd to helpers so menu can access it
   helpers.bot = bot;
 
-  // Handler untuk klik kategori menu
   bot.action(/^show_cat:(.+)$/, async (ctx) => {
       const categoryName = ctx.match[1];
-
-      // Ambil daftar command berdasarkan kategori dari bot.cmd
       const commands = Array.from(bot.cmd.values())
           .filter((cmd, index, self) =>
               cmd.category === categoryName &&
@@ -241,20 +169,12 @@ const launchTelegramBot = () => {
       }
   });
 
-  // Handler tombol kembali
   bot.action('back_to_help', async (ctx) => {
-      try {
-          await ctx.deleteMessage();
-      } catch (e) {
-          // Ignore if message already deleted
-      }
+      try { await ctx.deleteMessage(); } catch (e) {}
       const helpCmd = bot.cmd.get('help');
-      if (helpCmd) {
-          return helpCmd.code(ctx, helpers);
-      }
+      if (helpCmd) return helpCmd.code(ctx, helpers);
   });
 
-  // --- /start command ---
   bot.command('start', async (ctx) => {
       const args = ctx.message.text.split(' ');
       if (args.length > 1 && args[1].startsWith('ref_')) {
@@ -291,32 +211,22 @@ const launchTelegramBot = () => {
       const randomImageUrl = `https://picsum.photos/500/300?random=${Date.now()}`;
 
       try {
-          await ctx.replyWithPhoto(randomImageUrl, {
-              caption: welcomeText,
-              parse_mode: 'Markdown'
-          });
+          await ctx.replyWithPhoto(randomImageUrl, { caption: welcomeText, parse_mode: 'Markdown' });
       } catch (error) {
           await ctx.reply(welcomeText, { parse_mode: 'Markdown' });
       }
   });
 
-  // --- Generic Callback Query Handler ---
   bot.on('callback_query', (ctx) => {
-    // Iterate over all unique commands and let them decide if they can handle the callback
     const seenCallbacks = new Set();
     for (const command of bot.cmd.values()) {
         if (typeof command.callback === 'function' && !seenCallbacks.has(command.callback)) {
             seenCallbacks.add(command.callback);
-            try {
-                command.callback(ctx, helpers);
-            } catch (e) {
-                console.error(`Error in callback for command ${command.name}:`, e);
-            }
+            try { command.callback(ctx, helpers); } catch (e) { console.error(e); }
         }
     }
   });
 
-  // --- Payment Handlers (Telegram Stars) ---
   bot.on('pre_checkout_query', (ctx) => ctx.answerPreCheckoutQuery(true));
 
   bot.on('successful_payment', async (ctx) => {
@@ -325,49 +235,24 @@ const launchTelegramBot = () => {
       const { userId, coinAmount, method } = payload;
 
       if (method === 'stars') {
-        updateCoins(userId, getCoins(userId) + coinAmount);
+        helpers.updateCoins(userId, helpers.getCoins(userId) + coinAmount);
+        await ctx.reply(`✅ *PAYMENT CONFIRMED (Stars)*\n\n${coinAmount} coins have been added to your balance.`, { parse_mode: 'Markdown' });
 
-        await ctx.reply(
-          `✅ *PAYMENT CONFIRMED (Stars)*\n\n` +
-          `${coinAmount} coins have been added to your balance.`,
-          { parse_mode: 'Markdown' }
-        );
-
-        const broadcastMessage = `
-✅ TRANSAKSI BERHASIL (STARS)!
-
-Item: ${coinAmount} Koin SakuraBot
-Harga: ${ctx.message.successful_payment.total_amount} ⭐️
-Waktu: ${moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')}
-Buyer: ${ctx.from.first_name} (\`${userId}\`)
-
-Ketentuan:
-- Item yang sudah dibeli/dibayar tidak dapat dikembalikan
-        `;
+        const broadcastMessage = `✅ TRANSAKSI BERHASIL (STARS)!\n\nItem: ${coinAmount} Koin SakuraBot\nHarga: ${ctx.message.successful_payment.total_amount} ⭐️\nWaktu: ${moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')}\nBuyer: ${ctx.from.first_name} (\`${userId}\`)`;
 
         if (config.bot.tg_newsletterid) {
           try {
-            await bot.telegram.sendMessage(
-              config.bot.tg_newsletterid,
-              broadcastMessage,
-              { parse_mode: 'Markdown' }
-            );
-          } catch (e) {
-            console.error('Broadcast error:', e);
-          }
+            await bot.telegram.sendMessage(config.bot.tg_newsletterid, broadcastMessage, { parse_mode: 'Markdown' });
+          } catch (e) {}
         }
       }
-    } catch (e) {
-      console.error('Error handling successful payment:', e);
-    }
+    } catch (e) { console.error(e); }
   });
 
-    // --- Auto Broadcast List Addition ---
   bot.on('my_chat_member', async (ctx) => {
     const { old_chat_member, new_chat_member, chat } = ctx.myChatMember;
     const user = ctx.myChatMember.from;
 
-    // Check if the bot was promoted to administrator
     if (new_chat_member.status === 'administrator' && old_chat_member.status !== 'administrator') {
         const isChannel = chat.type === 'channel';
         const isGroup = chat.type === 'group' || chat.type === 'supergroup';
@@ -380,15 +265,11 @@ Ketentuan:
                 list.push(chat.id);
                 db.set(key, list);
 
-                // Reward the user who added/promoted the bot
                 const coinReward = 5;
                 const sakuraniteReward = 1000;
 
-                const currentCoins = getCoins(user.id);
-                const currentSakuranite = getSakuranite(user.id);
-
-                updateCoins(user.id, currentCoins + coinReward);
-                updateSakuranite(user.id, currentSakuranite + sakuraniteReward);
+                helpers.updateCoins(user.id, helpers.getCoins(user.id) + coinReward);
+                helpers.updateSakuranite(user.id, helpers.getSakuranite(user.id) + sakuraniteReward);
 
                 const rewardMsg = `🎉 Terima kasih telah menambahkan SakuraBot sebagai admin di <b>${chat.title || 'grup/channel'}</b>!\n\n` +
                     `Kamu mendapatkan hadiah:\n` +
@@ -396,19 +277,13 @@ Ketentuan:
                     `🌸 <b>${sakuraniteReward} Sakuranite</b>\n\n` +
                     `Grup/Channel ini telah otomatis ditambahkan ke daftar broadcast.`;
 
-                // Notify in the chat
                 try {
                     await ctx.telegram.sendMessage(chat.id, `✅ SakuraBot telah ditambahkan ke daftar broadcast.\nTerima kasih kepada <a href="tg://user?id=${user.id}">${user.first_name}</a> atas hadiahnya!`, { parse_mode: 'HTML' });
-                } catch (e) {
-                    console.error('Could not send confirmation to chat:', e);
-                }
+                } catch (e) {}
 
-                // Notify the user privately
                 try {
                     await ctx.telegram.sendMessage(user.id, rewardMsg, { parse_mode: 'HTML' });
-                } catch (e) {
-                    console.error('Could not send reward notification to user:', e);
-                }
+                } catch (e) {}
             }
         }
     }
@@ -417,60 +292,32 @@ Ketentuan:
   bot.launch();
   global.tgBot = bot;
 
-  // Schedule user statistics every 7 days
   cron.schedule('0 0 */7 * *', async () => {
     if (!config.bot.tg_newsletterid) return;
-
     try {
         const listusers = require('./commands/owner/listusers');
         let userIds = db.get('users') || [];
-        if (!Array.isArray(userIds)) {
-            userIds = Object.keys(userIds);
-        }
-
-        const analyticsData = listusers.getAnalyticsData(userIds, isOwner, isPremium);
+        if (!Array.isArray(userIds)) userIds = Object.keys(userIds);
+        const analyticsData = listusers.getAnalyticsData(userIds, helpers.isOwner, helpers.isPremium);
         const chartUrl = listusers.getAnalyticsChartUrl(analyticsData);
         const caption = listusers.getAnalyticsText(analyticsData);
-
-        await bot.telegram.sendPhoto(config.bot.tg_newsletterid, chartUrl, {
-            caption: `📅 <b>Weekly User Statistics Report</b>\n\n${caption}`,
-            parse_mode: 'HTML'
-        });
-    } catch (error) {
-        console.error('Failed to send weekly user statistics:', error);
-    }
+        await bot.telegram.sendPhoto(config.bot.tg_newsletterid, chartUrl, { caption: `📅 <b>Weekly User Statistics Report</b>\n\n${caption}`, parse_mode: 'HTML' });
+    } catch (error) { console.error(error); }
   });
 
-  // Schedule a backup to run every 7 days if enabled
   if (config.system.autoBackup) {
     cron.schedule('0 0 */7 * *', () => {
         const backupPath = path.resolve(__dirname, '../database');
         const outputPath = path.resolve(__dirname, `../backup-${Date.now()}.zip`);
         const output = fs.createWriteStream(outputPath);
-        const archive = archiver('zip', {
-            zlib: { level: 9 }
-        });
+        const archive = archiver('zip', { zlib: { level: 9 } });
 
         output.on('close', async () => {
             try {
-                await bot.telegram.sendDocument(config.owner.id_tele, {
-                    source: outputPath,
-                    filename: path.basename(outputPath)
-                });
+                await bot.telegram.sendDocument(config.owner.id_tele, { source: outputPath, filename: path.basename(outputPath) });
                 fs.unlinkSync(outputPath);
-
-                // Send config.json
-                const configPath = path.resolve(__dirname, '../config.json');
-                await bot.telegram.sendDocument(config.owner.id_tele, {
-                    source: configPath,
-                    filename: 'config.json'
-                });
-            } catch (error) {
-                console.error('Failed to send scheduled backup:', error);
-            }
-        });
-        archive.on('error', (err) => {
-            console.error('Error during scheduled backup archiving:', err);
+                await bot.telegram.sendDocument(config.owner.id_tele, { source: path.resolve(__dirname, '../config.json'), filename: 'config.json' });
+            } catch (error) { console.error(error); }
         });
         archive.pipe(output);
         archive.directory(backupPath, false);

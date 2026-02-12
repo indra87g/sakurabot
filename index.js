@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { Consolefy } = require("consolefy");
+const { getDb } = require('./src/database');
+const { UserAccessService, EconomyService, LinkingService } = require('./src/services');
 
 class Config {
     constructor(filePath) {
@@ -20,14 +22,21 @@ const Formatter = {
 
 global.botStartTime = Date.now();
 const tools = require("./tools/exports.js");
+const config = new Config(path.resolve(__dirname, "config.json"));
+const consolefy = new Consolefy({ tag: pkg.name });
+
+// Initialize Databases
+const dbWa = getDb('wa');
+const dbTg = getDb('tg');
+
+// Initialize Shared Services
+const linkingService = new LinkingService(dbWa, dbTg);
 
 Object.assign(global, {
-    config: new Config(path.resolve(__dirname, "config.json")),
-    consolefy: new Consolefy({
-        tag: pkg.name
-    }),
+    config,
+    consolefy,
     formatter: Formatter,
-    tools: tools,
+    tools,
     formatUptime: tools.utils.formatUptime,
     escapeHTML: tools.utils.escapeHTML,
     botStatus: {
@@ -54,10 +63,12 @@ if (config.system && config.system.useServer) {
 const isWaBotConfigValid = config.bot && config.bot.phoneNumber && config.bot.phoneNumber !== "YOUR_PHONE_NUMBER";
 const isTgBotConfigValid = config.bot && config.bot.botfather_token && config.bot.botfather_token !== "YOUR_BOTFATHER_TOKEN";
 
+const commonDeps = { config, consolefy, tools, linkingService };
+
 if (isWaBotConfigValid) {
     try {
         const startWaBot = require("./wa/index.js");
-        startWaBot();
+        startWaBot({ ...commonDeps, db: dbWa });
         global.botStatus.wa = true;
     } catch (error) {
         consolefy.error("Failed to start WhatsApp bot:", error);
@@ -69,7 +80,7 @@ if (isWaBotConfigValid) {
 if (isTgBotConfigValid) {
     try {
         const { launchTelegramBot } = require("./tg/index.js");
-        launchTelegramBot();
+        launchTelegramBot({ ...commonDeps, db: dbTg });
         global.botStatus.tg = true;
     } catch (error) {
         consolefy.error("Failed to start Telegram bot:", error);

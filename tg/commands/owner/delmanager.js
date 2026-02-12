@@ -1,33 +1,21 @@
 module.exports = {
     name: 'delmanager',
-    aliases: [],
-    category: 'owner',
-    code: async (ctx, { isLeader, db }) => {
-        if (!isLeader(ctx.from.id)) {
-            return ctx.reply(global.config.msg.notLeader);
-        }
+    description: 'Remove a manager from the bot.',
+    code: async (ctx, { isLeader, removeManager, config }) => {
+        if (!isLeader(ctx.from.id)) return ctx.reply(config.msg.notLeader);
 
-        let managerId;
         const args = ctx.message.text.split(' ').slice(1);
+        const targetId = parseInt(args[0]);
 
-        if (args.length > 0 && /^\d+$/.test(args[0])) {
-            managerId = parseInt(args[0], 10);
-        } else if (ctx.message.reply_to_message && ctx.message.reply_to_message.from) {
-            managerId = ctx.message.reply_to_message.from.id;
-        } else {
-            return ctx.reply('Please provide a manager ID or reply to a manager\'s message.');
+        if (!targetId || isNaN(targetId)) {
+            return ctx.reply('Please provide a valid user ID.');
         }
 
-        const managers = db.get('managers') || [];
-        const managerIndex = managers.indexOf(managerId);
-
-        if (managerIndex === -1) {
-            return ctx.reply('That user is not a manager.');
+        const success = removeManager(targetId);
+        if (!success) {
+            return ctx.reply('User is not a manager.');
         }
 
-        managers.splice(managerIndex, 1);
-        db.set('managers', managers);
-
-        return ctx.reply(`Successfully removed manager with ID: ${managerId}`);
+        ctx.reply(`User ${targetId} has been removed from managers.`);
     }
 };
