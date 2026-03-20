@@ -17,18 +17,32 @@ module.exports = (dependencies) => {
         return next();
     };
 
+    let activeBansCache = new Set();
+    let lastBanRefresh = 0;
+
+    const refreshBanCache = () => {
+        const bans = db.get("bans") || [];
+        const now = new Date();
+        const activeBans = bans.filter(ban => new Date(ban.until) > now);
+
+        if (activeBans.length < bans.length) {
+            db.set("bans", activeBans);
+        }
+
+        activeBansCache = new Set(activeBans.map(ban => ban.id));
+        lastBanRefresh = Date.now();
+    };
+
     // Middleware to check for banned users
     const banMiddleware = (ctx, next) => {
         if (!ctx.from) return next();
 
-        const userId = ctx.from.id;
-        let bans = db.get("bans") || [];
-        const now = new Date();
+        const now = Date.now();
+        if (now - lastBanRefresh > 1000) {
+            refreshBanCache();
+        }
 
-        const activeBans = bans.filter(ban => new Date(ban.until) > now);
-        if (activeBans.length < bans.length) db.set("bans", activeBans);
-
-        if (activeBans.find(ban => ban.id === userId)) {
+        if (activeBansCache.has(ctx.from.id)) {
             return ctx.reply(config.msg.banned);
         }
         return next();
