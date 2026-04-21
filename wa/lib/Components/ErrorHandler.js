@@ -89,7 +89,10 @@ process.on('uncaughtException', (error) => {
    else
       console.error('❌ Uncaught Exception', ':', error)
 
-   process.exit(1)
+   if (message === 'ENOMEM')
+      throw new Error('Out of memory, restarting...')
+   else
+      throw new Error('Uncaught Exception: ' + error)
 })
 
 process.on('unhandledRejection', (reason) => {
@@ -98,5 +101,5 @@ process.on('unhandledRejection', (reason) => {
 
    console.error('❌ Unhandled Rejection', ':', reason)
 
-   process.exit(1)
+   throw new Error(`Unhandled Rejection: ${message}`)
 })
